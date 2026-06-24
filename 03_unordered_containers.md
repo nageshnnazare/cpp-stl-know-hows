@@ -4,6 +4,13 @@
 
 Unordered containers use hash tables for storage, providing average O(1) access time. They don't maintain any ordering of elements but offer significantly faster lookup, insertion, and deletion for most use cases.
 
+> **Ordered or unordered?** Reach for the [associative containers](02_associative_containers.md)
+> (`set`/`map`) when you need sorted iteration, `lower_bound`/`upper_bound`
+> range queries, or a guaranteed O(log n) worst case. Reach for these
+> unordered containers when you only need membership/lookup and want O(1)
+> *average* performance. A custom type needs a valid `operator==` **and** a
+> hash function (see [Custom Hash Function](#custom-hash-function)).
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │           UNORDERED CONTAINERS FAMILY                    │
@@ -479,9 +486,11 @@ return hash1 ^ hash2;
 // Better: XOR with shift (reduces symmetry problems)
 return hash1 ^ (hash2 << 1);
 
-// Boost's hash_combine approach
-size_t hash_combine(size_t h1, size_t h2) {
-    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+// Boost's hash_combine approach (the magic constant is derived from the
+// golden ratio). 0x9e3779b9 is the 32-bit value; on 64-bit platforms a
+// better mixing constant is 0x9e3779b97f4a7c15.
+size_t hash_combine(size_t seed, size_t value) {
+    return seed ^ (value + 0x9e3779b9 + (seed << 6) + (seed >> 2));
 }
 
 // For multiple values
@@ -548,7 +557,7 @@ unordered_multimap<string, int> grades:
 
 All entries with key "Alice" hash to same bucket:
 ┌─────────────────────────────────────────────┐
-│ Bucket hash("Alice"): → ["Alice",85]        │
+│ Bucket hash("Alice"):  → ["Alice",85]       │
 │                        → ["Alice",92]       │
 │                        → ["Alice",88] →     │
 └─────────────────────────────────────────────┘
@@ -587,12 +596,12 @@ void analyze_hash_table() {
 ### Rehashing Visualization
 ```
 Before rehash (load factor > threshold):
-┌────────────────┐
-│ Bucket 0: →[5] │
+┌────────────────────┐
+│ Bucket 0: →[5]     │
 │ Bucket 1: →[1]→[6] │
 │ Bucket 2: →[2]→[7] │
-│ Bucket 3: →[3] │
-└────────────────┘
+│ Bucket 3: →[3]     │
+└────────────────────┘
 Size: 6, Buckets: 4, Load: 1.5
 
 After rehash (double bucket count):
@@ -1008,6 +1017,7 @@ Here's a comprehensive example integrating all unordered containers with custom 
 #include <list>
 #include <functional>
 #include <iomanip>
+#include <algorithm>   // std::partial_sort, std::min
 
 // 1. Custom type for cache keys
 struct CacheKey {
@@ -1451,10 +1461,18 @@ This example shows real-world use of hash tables in a caching system!
 
 ---
 
+## Related Topics
+- [Associative Containers](02_associative_containers.md) — the ordered, tree-based alternatives and when to prefer them.
+- [Object-Oriented Programming](00_oop_concepts.md) — your key type needs a correct `operator==` (and ideally value semantics).
+- [Lambdas](10_lambdas.md) — hashers and equality predicates are often supplied as function objects/lambdas.
+- [Templates](09_templates.md) — `std::hash` is a class template you specialize for your own types.
+- [Sequence Containers](01_sequence_containers.md) — an LRU cache combines `unordered_map` with a `list` (see that chapter's exercises).
+- [Quick Reference](99_quick_reference.md) — complexity table and the container decision tree.
+
 ## Next Steps
 - **Next**: [Container Adaptors →](04_container_adaptors.md)
 - **Previous**: [← Associative Containers](02_associative_containers.md)
 
 ---
-*Part 3 of 22 - Unordered Containers*
+*Chapter 3 — Unordered Containers*
 

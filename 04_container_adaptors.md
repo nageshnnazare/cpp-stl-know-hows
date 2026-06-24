@@ -2,7 +2,9 @@
 
 ## Overview
 
-Container adaptors are not full container classes, but rather wrappers around existing sequential containers. They provide a specific interface by restricting or modifying the interface of the underlying container.
+Container adaptors are not full container classes, but rather wrappers around existing [sequence containers](01_sequence_containers.md) (`deque`, `vector`, `list`). They provide a restricted interface by delegating to an underlying container.
+
+⚠️ **Gotcha**: Adaptors expose **no iterators** — no `begin()`/`end()`, no range-`for`, and no direct use with STL algorithms. To traverse, pop elements into a temporary structure or use the underlying container directly. See [Iterators](05_iterators.md) for how algorithms expect iterator ranges.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -29,7 +31,13 @@ Regular Container:
 Container Adaptor:
 - Restricted interface (push, pop, top/front)
 - Access only at specific positions
+- No iterators (cannot range-for or pass to algorithms)
 - Single, well-defined purpose
+
+Default underlying containers ([cppreference](https://en.cppreference.com/w/cpp/container)):
+- std::stack  → std::deque
+- std::queue  → std::deque
+- std::priority_queue → std::vector + std::less (max-heap; largest on top)
 ```
 
 ---
@@ -146,6 +154,7 @@ size()             | Number of elements       | O(1)
 swap(other)        | Swap with another stack  | O(1)
 
 Note: pop() returns void! Use top() before pop() to get value.
+No iterators — cannot traverse; see 05_iterators.md.
 ```
 
 ### Choosing Underlying Container
@@ -277,7 +286,8 @@ public:
 ```cpp
 #include <stack>
 #include <vector>
-#include <unordered_set>
+#include <unordered_set>  // see 03_unordered_containers.md
+#include <iostream>
 
 void dfs_iterative(int start, const std::vector<std::vector<int>>& graph) {
     std::stack<int> to_visit;
@@ -519,6 +529,9 @@ public:
 ```
 
 #### Use Case 4: Producer-Consumer Pattern
+
+Thread-safe queue built on `std::queue`; synchronization primitives are covered in [Multithreading](14_multithreading.md).
+
 ```cpp
 #include <queue>
 #include <mutex>
@@ -554,7 +567,7 @@ public:
 ## 3. std::priority_queue
 
 ### Description
-A heap-based data structure that always keeps the largest (or smallest) element at the top. Default is max-heap.
+A heap-based data structure that always keeps the extremal element at the top. The default is a **max-heap**: `std::priority_queue<T>` is `std::priority_queue<T, std::vector<T>, std::less<T>>`, so `top()` returns the **largest** element. Pass `std::greater<T>` as the third template argument for a min-heap.
 
 ### Visual Representation
 ```
@@ -605,13 +618,14 @@ Max-heap property: parent ≥ children
 #include <iostream>
 
 int main() {
-    // Construction (default: max-heap)
-    std::priority_queue<int> pq1;
+    // Default: max-heap — vector + std::less<T>
+    std::priority_queue<int> pq1;  // same as below
+    std::priority_queue<int, std::vector<int>, std::less<int>> pq_max;
     
-    // Specify underlying container (vector or deque)
-    std::priority_queue<int, std::vector<int>> pq2;
+    // Underlying container must support random-access iterators (vector or deque)
+    std::priority_queue<int, std::deque<int>> pq_deque;
     
-    // Min-heap (reverse order)
+    // Min-heap: std::greater puts smaller values at top()
     std::priority_queue<int, std::vector<int>, std::greater<int>> min_pq;
     
     // Max-heap example
@@ -649,11 +663,15 @@ int main() {
 ```
 
 ### Min-Heap vs Max-Heap
+
+The third template parameter is a **Compare** functor: `comp(a, b)` returns `true` if `a` is ordered **after** `b` (i.e., lower priority, deeper in the heap). `std::less` makes larger values float to `top()`; `std::greater` does the opposite.
+
 ```cpp
 #include <queue>
 #include <vector>
+#include <functional>  // std::less, std::greater
 
-// Max-heap (default) - largest element on top
+// Max-heap (default) — std::less → largest on top
 std::priority_queue<int> max_heap;
 max_heap.push(3);
 max_heap.push(1);
@@ -862,6 +880,7 @@ std::vector<int> merge_k_arrays(const std::vector<std::vector<int>>& arrays) {
 #include <vector>
 #include <limits>
 
+// Classic graph algorithm; priority_queue drives the "open set"
 struct Edge {
     int to;
     int weight;
@@ -970,21 +989,9 @@ Plus overhead from underlying container:
 
 ## Common Patterns and Idioms
 
-### Pattern 1: Stack-Based Calculator
-```cpp
-#include <stack>
-#include <string>
-#include <sstream>
+### Pattern 1: Monotonic Queue (Deque, Not std::queue)
 
-int evaluate_expression(const std::string& expr) {
-    std::stack<int> values;
-    std::stack<char> ops;
-    
-    // Simplified expression evaluator
-    // Full implementation would handle operator precedence
-    return 0;  // Placeholder
-}
-```
+For sliding-window min/max, `std::deque` beats `std::queue` because you need `pop_front` **and** `pop_back`. See the sliding-window example below; for a full deque treatment see [Sequence Containers](01_sequence_containers.md).
 
 ### Pattern 2: Monotonic Stack
 ```cpp
@@ -1060,28 +1067,40 @@ s.pop();
 
 ### 2. No Iteration Support
 ```cpp
-std::stack<int> s = {1, 2, 3, 4, 5};
+#include <stack>
+#include <iostream>
 
-// BAD: No iterators!
-// for (int x : s) { /* ... */ }  // ERROR
+std::stack<int> s;
+s.push(1); s.push(2); s.push(3);
 
-// WORKAROUND: Pop all elements
-std::stack<int> temp = s;  // Copy
+// BAD: adaptors have no begin()/end() — not even with std::begin(s)
+// for (int x : s) { }           // ERROR
+// std::find(s.begin(), s.end()) // ERROR
+
+// WORKAROUND: copy and drain (destroys order if you need the original)
+std::stack<int> temp = s;
 while (!temp.empty()) {
     std::cout << temp.top() << ' ';
     temp.pop();
 }
+// Or store data in a vector/deque and use stack/queue only as the access policy
 ```
 
 ### 3. priority_queue Comparison Direction
 ```cpp
-// Confusing: greater<int> gives MIN-heap!
-std::priority_queue<int, std::vector<int>, std::greater<int>> min_heap;
-//                                           ^^^^^^^^^^^
-//                                           "greater" → smallest on top
+#include <queue>
+#include <vector>
+#include <functional>
 
-// Reason: Comparator defines "what goes deeper in heap"
-// greater<int> means "larger values go deeper" → small values float up
+// Confusing but correct: std::greater → MIN-heap (smallest on top)
+std::priority_queue<int, std::vector<int>, std::greater<int>> min_heap;
+
+// Default max-heap uses std::less — largest on top
+std::priority_queue<int> max_heap;  // std::less<int> by default
+
+// Compare(a,b) == true  →  a ordered after b (sinks in heap)
+// std::less:  larger values sink  → max at top()
+// std::greater: smaller values sink → min at top()
 ```
 
 ### 4. Using Wrong Underlying Container
@@ -1632,10 +1651,19 @@ This example shows how container adaptors solve real OS/application problems!
 
 ---
 
+## Related Topics
+
+- [Sequence Containers](01_sequence_containers.md) — underlying `deque`, `vector`, and `list` that adaptors wrap
+- [Iterators](05_iterators.md) — why adaptors cannot supply iterator ranges to algorithms
+- [Algorithms](06_algorithms.md) — heap algorithms (`std::push_heap`, `make_heap`) on iterator ranges as an alternative to `priority_queue`
+- [Unordered Containers](03_unordered_containers.md) — `unordered_set` for visited tracking in BFS/DFS examples
+- [Multithreading](14_multithreading.md) — mutex/condition_variable patterns behind thread-safe queues
+- [Modern C++20/23 Features](07_modern_features.md) — `std::ranges` views when you need lazy, iterable pipelines instead of adaptors
+
 ## Next Steps
 - **Next**: [Iterators →](05_iterators.md)
 - **Previous**: [← Unordered Containers](03_unordered_containers.md)
 
 ---
-*Part 4 of 22 - Container Adaptors*
+*Chapter 4 — Container Adaptors*
 

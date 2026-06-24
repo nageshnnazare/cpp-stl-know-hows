@@ -27,25 +27,25 @@ OOP is a programming paradigm based on the concept of "objects" that contain dat
 
 ### Four Pillars of OOP
 ```
-┌─────────────────────────────────────────────────────┐
-│                 OOP PILLARS                         │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌──────────────┐  ┌──────────────┐                 │
-│  │ Encapsulation│  │  Abstraction │                 │
-│  │              │  │              │                 │
-│  │ Hide details │  │ Expose only  │                 │
-│  │ Bundle data  │  │ essential    │                 │
-│  └──────────────┘  └──────────────┘                 │
-│                                                     │
-│  ┌──────────────┐  ┌──────────────┐                 │
-│  │ Inheritance  │  │ Polymorphism │                 │
-│  │              │  │              │                 │
-│  │ Reuse code   │  │ Many forms   │                 │
-│  │ "IS-A"       │  │ Same interface│                │
-│  └──────────────┘  └──────────────┘                 │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│                 OOP PILLARS              │
+├──────────────────────────────────────────┤
+│                                          │
+│  ┌──────────────┐  ┌──────────────┐      │
+│  │ Encapsulation│  │  Abstraction │      │
+│  │              │  │              │      │
+│  │ Hide details │  │ Expose only  │      │
+│  │ Bundle data  │  │ essential    │      │
+│  └──────────────┘  └──────────────┘      │
+│                                          │
+│  ┌──────────────┐  ┌───────────────┐     │
+│  │ Inheritance  │  │ Polymorphism  │     │
+│  │              │  │               │     │
+│  │ Reuse code   │  │ Many forms    │     │
+│  │ "IS-A"       │  │ Same interface│     │
+│  └──────────────┘  └───────────────┘     │
+│                                          │
+└──────────────────────────────────────────┘
 ```
 
 ---
@@ -74,9 +74,9 @@ OOP is a programming paradigm based on the concept of "objects" that contain dat
 │  │  - accelerate()     │                │
 │  │  - brake()          │                │
 │  └─────────────────────┘                │
-│           │                              │
-│           │ instantiate                  │
-│           ▼                              │
+│           │                             │
+│           │ instantiate                 │
+│           ▼                             │
 │  ┌─────────────────────┐                │
 │  │ Object: myCar       │                │
 │  │  color = "red"      │  Instance      │
@@ -177,7 +177,7 @@ Bundling data and methods that operate on that data within a single unit (class)
 │  │  │  - validate_pin()              │  │  │
 │  │  └────────────────────────────────┘  │  │
 │  │           ▲                          │  │
-│  │           │ Protected                │  │
+│  │           │                          │  │
 │  │           │                          │  │
 │  │  ┌────────────────────────────────┐  │  │
 │  │  │ Public (Interface):            │  │  │
@@ -452,18 +452,18 @@ int main() {
 ### Inheritance Access Modes
 
 ```
-┌─────────────────────────────────────────────────────┐
-│        INHERITANCE ACCESS CONTROL                   │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Base Class    │  Public      │ Protected │ Private │
-│  Member        │ Inheritance  │           │         │
-│────────────────┼──────────────┼───────────┼──────── ┤
-│  public        │  public      │ protected │ private │
-│  protected     │  protected   │ protected │ private │
-│  private       │ inaccessible │ inaccessible│ inaccessible│
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│        INHERITANCE ACCESS CONTROL                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Base Class    │  Public      │ Protected  │ Private        │
+│  Member        │ Inheritance  │            │                │
+│────────────────┼──────────────┼────────────┼────────────────┤
+│  public        │  public      │ protected  │ private        │
+│  protected     │  protected   │ protected  │ private        │
+│  private       │ inaccessible │inaccessible│ inaccessible   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 
 Most common: public inheritance (IS-A relationship)
 ```
@@ -631,6 +631,7 @@ int main() {
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <cmath>   // std::sqrt used by Triangle::area()
 
 // Base class with virtual functions
 class Shape {
@@ -749,17 +750,17 @@ int main() {
 │  ┌──────────────────┐                           │
 │  │ Circle Object    │                           │
 │  ├──────────────────┤                           │
-│  │ vptr ───────────┼─┐  Hidden pointer          │
+│  │ vptr  ───────────┼─┐  Hidden pointer         │
 │  ├──────────────────┤ │                         │
-│  │ name_ = "Circle"│ │                          │
-│  │ radius_ = 4.0   │ │                          │
+│  │ name_ = "Circle" │ │                         │
+│  │ radius_ = 4.0    │ │                         │
 │  └──────────────────┘ │                         │
 │                       │                         │
 │                       └──> VTable (Circle)      │
 │                            ┌──────────────────┐ │
-│                            │ area()     ────┼─┼─> Circle::area()
-│                            │ perimeter()────┼─┼─> Circle::perimeter()
-│                            │ display()  ────┼─┼─> Shape::display()
+│                            │ area()       ────┼─┼─> Circle::area()
+│                            │ perimeter()  ────┼─┼─> Circle::perimeter()
+│                            │ display()    ────┼─┼─> Shape::display()
 │                            └──────────────────┘ │
 │                                                 │
 │  When calling: ptr->area()                      │
@@ -1221,6 +1222,14 @@ void hack(Secret& s) {
 
 ## Constructors and Destructors
 
+The example below manages a raw `char*` by hand to *demonstrate* the copy and
+move special members. In real code you would store a `std::string` and let the
+compiler generate these (the **Rule of Zero**). When you *do* manage a resource
+directly, you must obey the **Rule of Five** — see
+[Advanced Features → Rule of Five / Rule of Zero](12_advanced_features.md) for
+the full treatment, and [Exceptions](17_exceptions.md) for why destructors
+should be `noexcept`.
+
 ### Types of Constructors
 
 ```cpp
@@ -1484,16 +1493,16 @@ public:
 │  └──────────────────────────────┘                   │
 │                                                     │
 │  With virtual (dynamic binding):                    │
-│  ┌──────────────────────────────┐                   │
+│  ┌────────────────────────────────┐                 │
 │  │ Runtime decision through VTable│                 │
-│  │ Calls Circle::area()          │ ◄── Correct!     │
-│  └──────────────────────────────┘                   │
+│  │ Calls Circle::area()           │ ◄── Correct!    │
+│  └────────────────────────────────┘                 │
 │                                                     │
 │  Memory Layout:                                     │
 │  ┌─────────────────┐                                │
 │  │ Circle object   │                                │
 │  ├─────────────────┤                                │
-│  │ vptr ──────────┼──┐                              │
+│  │ vptr  ──────────┼──┐                             │
 │  ├─────────────────┤  │                             │
 │  │ radius = 5.0    │  │                             │
 │  └─────────────────┘  │                             │
@@ -1687,16 +1696,14 @@ int main() {
 │                 │                             │
 │         ┌───────┴───────┐                     │
 │         │               │                     │
-│    ┌────▼────┐     ┌───▼─────┐                │
-│    │  Mammal │     │  Bird   │                │
-│    │         │     │         │                │
-│    └────┬────┘     └───┬─────┘                │
-│         │              │                      │
-│         └──────┬───────┘                      │
+│    ┌────▼────┐      ┌───▼─────┐               │
+│    │  Mammal │      │  Bird   │               │
+│    └────┬────┘      └───┬─────┘               │
+│         │               │                     │
+│         └──────┬────────┘                     │
 │                │                              │
 │           ┌────▼────┐                         │
 │           │   Bat   │                         │
-│           │         │                         │
 │           └─────────┘                         │
 │                                               │
 │  Problem: Bat has TWO copies of Animal::age!  │
@@ -2393,11 +2400,19 @@ class Stack : public std::vector<int> {};  // Wrong! Breaks encapsulation
 
 ---
 
+## Related Topics
+- [Advanced Features](12_advanced_features.md) — move semantics, smart pointers, RAII, and the Rule of Five/Zero that make resource-owning classes safe.
+- [Templates](09_templates.md) — generic programming, the *other* major C++ paradigm that complements OOP.
+- [Exceptions](17_exceptions.md) — exception safety, `noexcept` destructors, and why RAII is the backbone of error handling.
+- [Best Practices](13_best_practices.md) — when to prefer composition over inheritance, and modern idioms.
+- [Utility Containers](08_utility_containers.md) — `std::variant` + `std::visit` offer a closed-set alternative to runtime polymorphism.
+- [Quick Reference](99_quick_reference.md) — concise reminders of the special members and virtual rules.
+
 ## Next Steps
 - **Next**: [Sequence Containers →](01_sequence_containers.md)
 - **Back to**: [Main README](README.md)
 
 ---
-*Part 0 of 22 - Object-Oriented Programming Fundamentals*
+*Chapter 0 — Object-Oriented Programming Fundamentals*
 
 

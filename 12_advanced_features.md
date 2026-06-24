@@ -2,27 +2,27 @@
 
 ## Overview
 
-Modern C++ introduces powerful features for resource management, performance optimization, and safer code. This chapter covers move semantics, smart pointers, RAII, perfect forwarding, and more.
+Modern C++ introduces powerful features for resource management, performance optimization, and safer code. This chapter covers move semantics, [smart pointers](https://en.cppreference.com/w/cpp/memory), RAII, perfect forwarding, and value categories — foundations also used in [lambdas](10_lambdas.md) and [metaprogramming](11_metaprogramming.md).
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│              ADVANCED C++ FEATURES                       │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  RESOURCE MGMT    │  PERFORMANCE     │  TYPE SAFETY      │
-│  ──────────────   │  ────────────    │  ──────────       │
-│  • RAII           │  • Move semantics│  • Strong types   │
-│  • Smart pointers │  • RVO/NRVO      │  • std::variant   │
-│  • Destructors    │  • Perfect fwd   │  • std::optional  │
-│                   │  • Forwarding refs│                  │
-│                                                          │
-│  MODERN IDIOMS    │  CONCURRENCY     │  ATTRIBUTES       │
-│  ──────────────   │  ────────────    │  ──────────       │
-│  • Rule of 5/0    │  • std::thread   │  • [[nodiscard]]  │
-│  • Copy elision   │  • std::atomic   │  • [[likely]]     │
-│  • Value semantics│  • Mutexes       │  • [[maybe_unused]]│
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│              ADVANCED C++ FEATURES                         │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  RESOURCE MGMT    │  PERFORMANCE      │  TYPE SAFETY       │
+│  ──────────────   │  ────────────     │  ──────────        │
+│  • RAII           │  • Move semantics │  • Strong types    │
+│  • Smart pointers │  • RVO/NRVO       │  • std::variant    │
+│  • Destructors    │  • Perfect fwd    │  • std::optional   │
+│                   │  • Forwarding refs│                    │
+│                                                            │
+│  MODERN IDIOMS    │  CONCURRENCY      │  ATTRIBUTES        │
+│  ──────────────   │  ────────────     │  ──────────        │
+│  • Rule of 5/0    │  • std::thread    │  • [[nodiscard]]   │
+│  • Copy elision   │  • std::atomic    │  • [[likely]]      │
+│  • Value semantics│  • Mutexes        │  • [[maybe_unused]]│
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -117,44 +117,51 @@ public:
 ```
 
 ### RAII for Locks
-```cpp
-#include <mutex>
 
-std::mutex mtx;
-int shared_data = 0;
-
-// BAD: Manual locking
-void increment_bad() {
-    mtx.lock();
-    shared_data++;
-    // If exception thrown, mutex remains locked!
-    mtx.unlock();
-}
-
-// GOOD: RAII lock guard
-void increment_good() {
-    std::lock_guard<std::mutex> lock(mtx);
-    shared_data++;
-    // Mutex automatically unlocked when leaving scope
-}
-
-// Also GOOD: Unique lock (more flexible)
-void increment_unique() {
-    std::unique_lock<std::mutex> lock(mtx);
-    shared_data++;
-    // Can manually unlock/lock if needed
-    lock.unlock();
-    // ... do other work ...
-    lock.lock();
-    shared_data++;
-}  // Automatically unlocks if still locked
-```
+See [Multithreading](14_multithreading.md) for full coverage. `std::lock_guard` and `std::unique_lock` are RAII wrappers around mutexes.
 
 ---
 
 ## Move Semantics
 
-### Lvalues vs Rvalues
+### Value Categories (C++11/17)
+
+C++ classifies every expression into one of three **value categories**:
+
+```
+┌────────────────────────────────────────────────────────┐
+│                Value Categories                        │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│                    expression                          │
+│                        │                               │
+│          ┌─────────────┴─────────────┐                 │
+│          ▼                           ▼                 │
+│      glvalue                      rvalue               │
+│          │                           │                 │
+│     ┌────┴────┐               ┌──────┴──────┐          │
+│     ▼         ▼               ▼             ▼          │
+│  lvalue   xvalue          prvalue                      │
+│                                                        │
+│  lvalue:  has identity, not expiring (named variable)  │
+│  xvalue:  has identity, expiring (result of std::move) │
+│  prvalue: no identity, expiring (literal, temporary)   │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+
+- **Lvalue** — has a name and address; `int&`, `T&`
+- **Xvalue** (expiring value) — can be moved from; `std::move(x)` produces an xvalue
+- **Prvalue** (pure rvalue) — temporaries, literals; `42`, `std::string("hi")`
+
+`std::move` does **not** move anything — it is only an `static_cast` to an rvalue reference, enabling overload resolution to pick move constructors/assignment. The actual transfer happens in the move operation.
+
+⚠️ **Gotchas**
+- Moved-from objects remain **valid but unspecified** — you may assign to them or destroy them, but don't assume their value.
+- Never `std::move` a `return` of a local variable — it can **block NRVO** and pessimizes codegen. Just `return local;`.
+- Move constructors should be marked `noexcept` when possible — `std::vector` uses copy instead of move if the move operation may throw.
+
+### Lvalues vs Rvalues (Classic View)
 ```
 ┌────────────────────────────────────────────────────────┐
 │              Lvalues vs Rvalues                        │
@@ -165,7 +172,7 @@ void increment_unique() {
 │    x = 10;        // OK: can assign to lvalue          │
 │                                                        │
 │  Rvalue: Temporary, doesn't persist                    │
-│    int y = 5 + 3; // 5+3 is rvalue                     │
+│    int y = 5 + 3; // 5+3 is prvalue                    │
 │    5 + 3 = 10;    // ERROR: can't assign to rvalue     │
 │                                                        │
 │  References:                                           │
@@ -256,27 +263,26 @@ Source:  [nullptr]  (source is empty but valid)
 Cost: Copy = O(n), Move = O(1)
 ```
 
-### std::move and std::forward
+### std::move
 ```cpp
+#include <iostream>
 #include <utility>
 #include <vector>
 #include <string>
 
 int main() {
     std::string s1 = "Hello";
-    
-    // std::move casts to rvalue reference
+
+    // std::move is a cast to rvalue reference — enables move overload
     std::string s2 = std::move(s1);
-    // s1 is now in "moved-from" state (valid but unspecified)
-    // s2 owns the data
-    
+    // s1 is now valid-but-unspecified; s2 owns the data
+
     std::cout << "s1: " << s1 << '\n';  // May be empty
     std::cout << "s2: " << s2 << '\n';  // "Hello"
-    
-    // Move into container
+
     std::vector<std::string> vec;
-    vec.push_back(std::move(s2));  // Moves s2 into vector
-    
+    vec.push_back(std::move(s2));  // Explicit move into container
+
     return 0;
 }
 ```
@@ -288,15 +294,15 @@ int main() {
 
 std::string make_string() {
     std::string temp = "Hello";
-    return temp;  // Move (or RVO), not copy!
+    return temp;  // NRVO or implicit move — never std::move here!
 }
 
 int main() {
-    std::string s = make_string();  // Move, not copy
-    
+    std::string s = make_string();  // Constructed in s (RVO) or moved
+
     std::vector<std::string> vec;
-    vec.push_back(std::string("World"));  // Temporary moved, not copied
-    
+    vec.push_back(std::string("World"));  // Temporary bound to rvalue ref, then moved
+
     return 0;
 }
 ```
@@ -323,8 +329,8 @@ int main() {
 ```
 
 ```cpp
-#include <memory>
 #include <iostream>
+#include <memory>
 
 class Widget {
 public:
@@ -334,33 +340,18 @@ public:
 };
 
 int main() {
-    // Create unique_ptr
-    std::unique_ptr<Widget> ptr1(new Widget);
-    std::unique_ptr<Widget> ptr2 = std::make_unique<Widget>();  // Preferred (C++14)
-    
-    // Use it
+    // Prefer make_unique / make_shared — never raw new/delete for ownership
+    auto ptr1 = std::make_unique<Widget>();
+    auto ptr2 = std::make_unique<Widget>();
+
     ptr2->use();
-    (*ptr2).use();
-    
-    // Transfer ownership
+
     std::unique_ptr<Widget> ptr3 = std::move(ptr2);
     // ptr2 is now nullptr
-    
-    if (ptr2 == nullptr) {
-        std::cout << "ptr2 is null\n";
-    }
-    
-    // Custom deleter
-    auto deleter = [](Widget* p) {
-        std::cout << "Custom delete\n";
-        delete p;
-    };
-    std::unique_ptr<Widget, decltype(deleter)> ptr4(new Widget, deleter);
-    
-    // Array version
-    std::unique_ptr<int[]> arr = std::make_unique<int[]>(10);
-    arr[0] = 42;
-    
+
+    std::shared_ptr<Widget> shared = std::make_shared<Widget>();
+    std::cout << "Ref count: " << shared.use_count() << '\n';  // 1
+
     return 0;
 }  // All widgets automatically destroyed
 ```
@@ -375,31 +366,30 @@ int main() {
 │  • Shared ownership via reference counting             │
 │  • Can be copied                                       │
 │  • Small overhead (ref count)                          │
-│  • Thread-safe ref counting                            │
+│  • Thread-safe ref counting (atomic)                   │
+│  • NOT thread-safe for the pointee itself              │
 │                                                        │
 │  Use when: Multiple owners needed                      │
+│  Prefer: std::make_shared (single allocation)          │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
 
+⚠️ **Gotchas**: Concurrent access to the **managed object** still requires your own synchronization. Only the reference count is atomic. Avoid `shared_ptr(new T)` — use `std::make_shared<T>(...)` for exception safety and fewer allocations.
+
 ```cpp
+#include <iostream>
 #include <memory>
 
 int main() {
-    // Create shared_ptr
     std::shared_ptr<Widget> ptr1 = std::make_shared<Widget>();  // Preferred
-    std::shared_ptr<Widget> ptr2(new Widget);                   // OK but less efficient
-    
-    // Share ownership
-    std::shared_ptr<Widget> ptr3 = ptr1;  // Copy increases ref count
-    std::shared_ptr<Widget> ptr4 = ptr1;  // Ref count = 3
-    
-    std::cout << "Ref count: " << ptr1.use_count() << '\n';  // 3
-    
-    ptr3.reset();  // Decreases ref count
+    std::shared_ptr<Widget> ptr2 = ptr1;  // Ref count = 2
+
     std::cout << "Ref count: " << ptr1.use_count() << '\n';  // 2
-    
-    // Object destroyed when last shared_ptr is destroyed
+
+    ptr2.reset();
+    std::cout << "Ref count: " << ptr1.use_count() << '\n';  // 1
+
     return 0;
 }
 ```
@@ -506,19 +496,26 @@ struct NodeGood {
 ## Perfect Forwarding
 
 ### Forwarding References
+
+`T&&` in a **deduced** context (template parameter or `auto&&`) is a forwarding (universal) reference — it binds to both lvalues and rvalues. Use `std::forward<T>` (not `std::move`) to preserve the original value category when passing along.
+
 ```cpp
+#include <utility>
+
+void process(int& x);
+void process(int&& x);
+
 template<typename T>
-void wrapper(T&& arg) {  // T&& is forwarding reference (universal reference)
-    // Forward arg to another function, preserving lvalue/rvalue-ness
+void wrapper(T&& arg) {  // forwarding reference when T is deduced
     process(std::forward<T>(arg));
 }
 
 int main() {
     int x = 42;
-    wrapper(x);        // T = int&, arg is lvalue
-    wrapper(42);       // T = int, arg is rvalue
-    wrapper(std::move(x));  // T = int, arg is rvalue
-    
+    wrapper(x);               // T = int&,  forwards as lvalue
+    wrapper(42);              // T = int,   forwards as rvalue
+    wrapper(std::move(x));    // T = int,   forwards as rvalue
+
     return 0;
 }
 ```
@@ -529,42 +526,42 @@ int main() {
 │            Reference Collapsing Rules                  │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
-│  T&  &  → T&      (lvalue ref)                        │
-│  T&  && → T&      (lvalue ref)                        │
-│  T&& &  → T&      (lvalue ref)                        │
-│  T&& && → T&&     (rvalue ref)                        │
+│  T&  &  → T&      (lvalue ref)                         │
+│  T&  && → T&      (lvalue ref)                         │
+│  T&& &  → T&      (lvalue ref)                         │
+│  T&& && → T&&     (rvalue ref)                         │
 │                                                        │
-│  Result: Only T&& && produces T&&                     │
+│  Result: Only T&& && produces T&&                      │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
 
 ### Perfect Forwarding Example
 ```cpp
-#include <utility>
+#include <iostream>
 #include <memory>
+#include <utility>
 
-// Factory function with perfect forwarding
+// Use the standard factory — shown here to illustrate forwarding mechanics
 template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+std::unique_ptr<T> make(Args&&... args) {
+    return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 struct Point {
     int x, y;
     Point(int x, int y) : x(x), y(y) {}
     Point(const Point&) { std::cout << "Copy\n"; }
-    Point(Point&&) { std::cout << "Move\n"; }
+    Point(Point&&) noexcept { std::cout << "Move\n"; }
 };
 
 int main() {
-    // Forwards arguments to Point constructor
-    auto p1 = make_unique<Point>(10, 20);
-    
+    auto p1 = make<Point>(10, 20);
+
     Point temp(1, 2);
-    auto p2 = make_unique<Point>(temp);           // Copy
-    auto p3 = make_unique<Point>(std::move(temp)); // Move
-    
+    auto p2 = make<Point>(temp);                    // Forwards lvalue → copy
+    auto p3 = make<Point>(std::move(temp));          // Forwards xvalue → move
+
     return 0;
 }
 ```
@@ -625,10 +622,8 @@ public:
 ```
 
 ### Rule of Zero
-```
-If possible, don't define any special member functions.
-Use RAII types that manage their own resources.
-```
+
+Prefer the **Rule of Zero**: if all members manage their own resources (e.g. `std::unique_ptr`, `std::vector`, `std::string`), the compiler-generated special members are correct. See [Best Practices](13_best_practices.md).
 
 ```cpp
 class BetterResource {
@@ -652,7 +647,9 @@ public:
 std::string make_string() {
     std::string result = "Hello";
     // ... modify result ...
-    return result;  // RVO: No copy, no move!
+    return result;  // NRVO: compilers elide the copy/move here, but unlike
+                    // returning a prvalue this elision is NOT guaranteed by
+                    // the standard (it is a permitted optimization).
 }
 
 int main() {
@@ -680,36 +677,13 @@ std::vector<int> make_vector() {
 std::string s = std::string("Hello");  // No move, direct construction
 
 Widget get_widget() {
-    return Widget();  // Guaranteed: no copy or move
+    return Widget();  // Guaranteed copy elision (C++17): initializes the
+                      // caller's object directly — no copy/move is performed.
 }
 
-// Prvalues (pure rvalues) never create temporaries
-```
-
----
-
-## Value Categories (C++11/17)
-
-```
-┌────────────────────────────────────────────────────────┐
-│                Value Categories                        │
-├────────────────────────────────────────────────────────┤
-│                                                        │
-│                    expression                          │
-│                        │                               │
-│          ┌─────────────┴─────────────┐                 │
-│          ▼                           ▼                 │
-│      glvalue                      rvalue               │
-│          │                           │                 │
-│     ┌────┴────┐               ┌──────┴──────┐          │
-│     ▼         ▼               ▼             ▼          │
-│  lvalue   xvalue          prvalue                      │
-│                                                        │
-│  lvalue:  has identity, can't be moved                 │
-│  xvalue:  has identity, can be moved                   │
-│  prvalue: no identity, can be moved                    │
-│                                                        │
-└────────────────────────────────────────────────────────┘
+// Note: a prvalue still *denotes* an object; under C++17 "guaranteed copy
+// elision" it materializes a temporary only when actually needed (e.g. when
+// bound to a reference), and here it initializes the result object directly.
 ```
 
 ---
@@ -841,13 +815,18 @@ a->~A();  // Destroy A
 // Object lifetime of A ends
 
 B* b = new (buffer) B{100};
-// Object lifetime of B begins
+// Object lifetime of B begins — the storage now holds a B, NOT an A.
 
-// Accessing through old pointer is UB
-// int val = a->x;  // UB! a no longer valid
+// Accessing the storage as an A is UB now (there is no A object there):
+// int val = a->x;            // UB! 'a' points to an object whose life ended
+// A* bad = std::launder(reinterpret_cast<A*>(buffer));  // also UB: no A here
 
-// Use std::launder to get valid pointer
-A* new_a = std::launder(reinterpret_cast<A*>(buffer));
+// Just use the pointer the placement-new expression returned:
+b->y = 200;
+// std::launder is only needed to "refresh" a pointer to the SAME type that
+// now lives in reused storage (e.g. after re-placement-newing a B), not to
+// reinterpret a B as an A.
+B* valid_b = std::launder(reinterpret_cast<B*>(buffer));
 ```
 
 ---
@@ -1387,10 +1366,22 @@ This example shows modern C++ resource management in action!
 
 ---
 
+## Related Topics
+
+- [Best Practices](13_best_practices.md) — Rule of Zero, `emplace`, noexcept move operations
+- [Lambdas](10_lambdas.md) — perfect forwarding in template lambdas; init-capture with `std::move`
+- [Metaprogramming](11_metaprogramming.md) — `if constexpr` with type traits and value categories
+- [Exceptions](17_exceptions.md) — RAII and exception safety guarantees
+- [Memory & Allocators](19_memory_allocators.md) — allocation patterns behind `make_shared` / `make_unique`
+- [Multithreading](14_multithreading.md) — `shared_ptr` atomic ref count vs pointee thread safety
+- [OOP Concepts](00_oop_concepts.md) — value semantics, encapsulation, destructor role in RAII
+
+---
+
 ## Next Steps
 - **Next**: [Best Practices and Idioms →](13_best_practices.md)
 - **Previous**: [← Metaprogramming](11_metaprogramming.md)
 
 ---
-*Part 12 of 22 - Advanced C++ Features*
+*Chapter 12 — Advanced C++ Features*
 

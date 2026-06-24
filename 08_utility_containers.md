@@ -2,7 +2,7 @@
 
 ## Overview
 
-Beyond the standard sequence and associative containers, C++ provides several utility types for special purposes: strings, optional values, variants, tuples, and more.
+Beyond the standard [sequence](01_sequence_containers.md) and [associative](02_associative_containers.md) containers, C++ provides several utility types for special purposes: strings, optional values, variants, tuples, and non-owning views like [`std::span`](07_modern_features.md).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -46,9 +46,9 @@ int main() {
     s = s2;
     s.assign("World");
     
-    // Concatenation
-    std::string result = s1 + " " + s2;    // "Hello World"
-    s1 += " World";                         // Append
+    // Concatenation (s1 is still empty here, s2 == "Hello")
+    std::string result = s1 + " " + s2;    // " Hello"
+    s1 += " World";                         // Append -> s1 == " World"
     s1.append(" !");                        // Append method
     
     // Access
@@ -337,9 +337,11 @@ int main() {
 ✓ Parsing without allocations
 ✓ Substring operations without copying
 ✗ Storing strings (use std::string)
-✗ When you need null-termination guarantee
-✗ Returning from functions (usually)
+✗ When you need null-termination guarantee — data() is NOT guaranteed '\0'-terminated
+✗ Returning from functions (usually) — same dangling risk as [views](07_modern_features.md)
 ```
+
+⚠️ **Gotchas**: `sv.data()` points at the first character but `sv[size()]` is not required to be `'\0'`. APIs expecting C strings (`fopen`, legacy C libraries) need an owned `std::string` or a copied buffer. [`std::format`](07_modern_features.md) and most modern APIs accept `string_view` directly.
 
 ---
 
@@ -347,7 +349,7 @@ int main() {
 
 ### What is optional?
 
-Represents a value that may or may not exist. Better than using pointers or special values like -1.
+Represents a value that may or may not exist. Better than using pointers or special values like -1. For error signaling without a value, see [Exceptions](17_exceptions.md).
 
 ```cpp
 #include <optional>
@@ -383,6 +385,8 @@ int main() {
     return 0;
 }
 ```
+
+⚠️ **Gotchas**: `optional<T&>` (optional reference) is **not** part of standard C++ through C++23; it is proposed for C++26. Until then, use `T*` or `std::reference_wrapper<T>` when you need optional aliasing. Dereferencing an empty optional (`*opt`, `opt.value()`) is undefined behavior or throws `std::bad_optional_access`, respectively.
 
 ### optional Operations
 ```cpp
@@ -496,7 +500,7 @@ int main() {
 
 ### What is variant?
 
-Type-safe union. Can hold one of several types at a time.
+Type-safe union. Can hold one of several types at a time — unlike C `union`, it manages object lifetimes and works with non-trivial types like `std::string`. See [`std::any`](#stdany-c17) when the type set is unknown at compile time.
 
 ```cpp
 #include <variant>
@@ -518,7 +522,7 @@ int main() {
     // Get index of current type
     size_t idx = var.index();               // 0=int, 1=double, 2=string
     
-    // Access value (throws if wrong type)
+    // Access value (throws std::bad_variant_access if wrong type)
     int i = std::get<int>(var);             // Throws if not int
     
     // Safe access (returns pointer or nullptr)
@@ -528,6 +532,18 @@ int main() {
     
     return 0;
 }
+```
+
+### std::monostate — Default-Constructible variant
+
+A `std::variant` with no default-constructible alternative cannot be default-constructed. Insert `std::monostate` as the first alternative to represent "empty" or "none":
+
+```cpp
+#include <variant>
+
+std::variant<std::monostate, int, std::string> v;  // Default: holds monostate
+v = 42;
+if (std::holds_alternative<std::monostate>(v)) { /* empty */ }
 ```
 
 ### Visiting Variants
@@ -664,6 +680,8 @@ int main() {
 ```cpp
 #include <utility>
 #include <string>
+#include <map>
+#include <iostream>
 
 int main() {
     // Construction
@@ -683,7 +701,7 @@ int main() {
     std::pair<int, int> a(1, 2), b(1, 3);
     bool less = a < b;  // true (compares first, then second)
     
-    // Common use: map iterators
+    // Common use: map iterators — see Associative Containers
     std::map<int, std::string> m = { {1, "one"}, {2, "two"} };
     for (const auto& [key, value] : m) {  // Structured binding
         std::cout << key << ": " << value << '\n';
@@ -859,6 +877,45 @@ int main() {
 
 ---
 
+## std::span (C++20)
+
+[`std::span`](https://en.cppreference.com/w/cpp/container/span) is a **non-owning** view over contiguous memory — the numeric/array analogue of `string_view`. Full coverage of ranges views and `mdspan` is in [Modern C++20/23 Features](07_modern_features.md); here is the utility-type perspective.
+
+```cpp
+#include <span>
+#include <vector>
+#include <array>
+
+void scale(std::span<int> data, int factor) {
+    for (int& x : data) x *= factor;
+}
+
+int main() {
+    std::vector<int> vec = {1, 2, 3};
+    std::array<int, 3> arr = {4, 5, 6};
+    int raw[] = {7, 8, 9};
+
+    scale(vec, 2);   // Works with vector, array, C array
+    scale(arr, 2);
+    scale(raw, 2);
+
+    std::span s(vec);
+    auto tail = s.subspan(1);  // Non-owning subrange — vec must stay alive
+    return 0;
+}
+```
+
+| Type | Owns data? | Contiguous? | Typical use |
+|------|------------|-------------|-------------|
+| `std::string` | Yes | Yes | Store text |
+| `std::string_view` | No | Yes | Read-only string parameter |
+| `std::span<T>` | No | Yes | Read/write buffer parameter |
+| `std::vector<T>` | Yes | Yes | Growable owning storage |
+
+⚠️ **Gotchas**: A `span` does not extend the lifetime of its source. Returning `span` over a local `vector` dangling is the same mistake as returning `string_view` over a temporary string.
+
+---
+
 ## std::reference_wrapper
 
 ### What is reference_wrapper?
@@ -903,7 +960,7 @@ int main() {
 
 ### What is std::function?
 
-Type-erased wrapper for any callable (function, lambda, functor).
+Type-erased wrapper for any callable (function, [lambda](10_lambdas.md), functor). Prefer a concrete function type or template when you do not need type erasure — `std::function` may allocate.
 
 ```cpp
 #include <functional>
@@ -960,6 +1017,7 @@ int main() {
 ├──────────────────┼────────────────────┼────────────────────────┤
 │ string           │ Owned text         │ Store strings          │
 │ string_view      │ String reference   │ Function parameters    │
+│ span<T>          │ Buffer reference   │ Contiguous data params │
 │ optional<T>      │ Maybe value        │ Optional returns       │
 │ variant<Ts...>   │ One of types       │ Known type set         │
 │ any              │ Any type           │ Unknown types          │
@@ -1045,6 +1103,7 @@ int y = opt.value();  // Throws std::bad_optional_access
 ```cpp
 std::variant<int, double> var = 3.14;
 int i = std::get<int>(var);  // Throws std::bad_variant_access
+// Use std::get_if or std::visit for safe dispatch
 ```
 
 ---
@@ -1102,7 +1161,7 @@ Here's a comprehensive example using all utility containers to build a flexible 
 #include <variant>
 #include <any>
 #include <tuple>
-#include <pair>
+#include <utility>
 #include <bitset>
 #include <functional>
 #include <vector>
@@ -1522,10 +1581,22 @@ This example demonstrates real-world usage of utility containers!
 
 ---
 
+## Related Topics
+
+- [Modern C++20/23 Features](07_modern_features.md) — `std::span`, `mdspan`, and range views share the non-owning lifetime model with `string_view`.
+- [Sequence Containers](01_sequence_containers.md) — `std::string` and `std::vector` are typical backing stores for views and spans.
+- [Templates](09_templates.md) — `std::variant`, `std::optional`, and `std::tuple` are class templates with specialization rules.
+- [Lambdas](10_lambdas.md) — visitors for `std::visit`, callbacks stored in `std::function`.
+- [Exceptions](17_exceptions.md) — `std::bad_optional_access`, `std::bad_variant_access`, `std::bad_any_cast`.
+- [Algorithms](06_algorithms.md) — `std::apply` for tuples; `std::get` patterns mirror variant access.
+- [Best Practices](13_best_practices.md) — when to choose `variant` vs inheritance vs `any`.
+
+---
+
 ## Next Steps
 - **Previous**: [← Modern C++20/23 Features](07_modern_features.md)
 - **Back to**: [Main README](README.md)
 
 ---
-*Part 8 of 22 - Utility Containers and Types*
+*Chapter 8 — Utility Containers and Types*
 

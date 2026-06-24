@@ -2,7 +2,7 @@
 
 ## Overview
 
-Template metaprogramming is compile-time computation using C++ templates. It allows you to move calculations and logic from runtime to compile time, improving performance and enabling advanced type manipulations.
+Template metaprogramming is compile-time computation using C++ [templates](09_templates.md). Modern C++ favors `constexpr` functions and `if constexpr` over classic recursive templates; [concepts](09_templates.md) (C++20) largely replace [SFINAE](#sfinae-substitution-failure-is-not-an-error) for constraints.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -165,41 +165,62 @@ int main() {
 
 ### consteval (C++20): Immediate Functions
 ```cpp
-// MUST be evaluated at compile time
+// MUST be evaluated at compile time — no runtime fallback
 consteval int square(int n) {
     return n * n;
 }
 
 int main() {
     constexpr int x = square(5);   // OK: compile time
-    
+
     int n = 5;
-    // int y = square(n);           // ERROR: n is not constexpr
-    
-    return 0;
+    // int y = square(n);           // ERROR: n is not a constant expression
 }
 ```
 
-### Comparison: constexpr vs consteval
+### constinit (C++20): Static Initialization
+```cpp
+#include <array>
+
+// Guarantees compile-time (constant) initialization of static/thread-local
+// storage. It does NOT make the variable const — it can be modified at runtime.
+constinit int global_counter = 42;
+
+// The initializer must be a constant expression. std::array is an aggregate
+// and is constant-initializable; std::vector is NOT (it allocates), so
+// `constinit std::vector<int> v = {1,2,3};` would FAIL to compile.
+constinit std::array<int, 3> ids = {1, 2, 3};  // avoids static-init-order fiasco
+
+int runtime_value();
+// constinit int derived = runtime_value();  // ERROR: initializer not constant
 ```
-┌────────────────────────────────────────────────────────┐
-│           constexpr vs consteval                       │
-├────────────────────────────────────────────────────────┤
-│                constexpr      │    consteval           │
-├───────────────────────────────┼────────────────────────┤
-│ Evaluation     Compile or     │    Compile time only   │
-│                runtime        │                        │
-│ Flexibility    High           │    Low                 │
-│ Use when       Can run both   │    Must be compile-time│
-│ Error if       -              │    Not constexpr args  │
-└────────────────────────────────────────────────────────┘
+
+### Comparison: constexpr vs consteval vs constinit
 ```
+┌─────────────────────────────────────────────────────────────────────┐
+│           constexpr vs consteval vs constinit                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                constexpr      │  consteval    │  constinit          │
+├───────────────────────────────┼───────────────┼─────────────────────┤
+│ What           Function/      │  Function     │  Variable           │
+│                variable       │  (immediate)  │  (static storage)   │
+│ When evaluated Compile or     │  Compile only │  Init at compile    │
+│                runtime        │               │  time; may mutate   │
+│ Runtime call   Yes (if args   │  No           │  N/A                │
+│                are constexpr) │               │                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+💡 **Hunch**: Use `constexpr` by default; `consteval` when compile-time-only is a hard requirement; `constinit` for globals that must be initialized before `main` without dynamic static init.
 
 ---
 
 ## Type Traits
 
 ### Standard Type Traits
+
+See [`<type_traits>` on cppreference](https://en.cppreference.com/w/cpp/header/type_traits). Prefer `*_v` variable templates (C++17) over `::value`.
+
 ```cpp
 #include <type_traits>
 #include <iostream>
@@ -285,7 +306,8 @@ int main() {
 
 ## if constexpr (C++17)
 
-### Compile-Time Branching
+`if constexpr` evaluates its condition at **compile time** and **discards** the non-taken branches — ill-formed code in discarded branches is not compiled. This is essential for heterogeneous templates without runtime overhead.
+
 ```cpp
 template<typename T>
 auto get_value(T t) {
@@ -367,10 +389,21 @@ std::string to_string_custom(const T& value) {
     } else if constexpr (std::is_pointer_v<T>) {
         return "pointer: " + std::to_string(reinterpret_cast<uintptr_t>(value));
     } else {
-        // Fallback: try to use std::to_string
+        static_assert(std::is_arithmetic_v<T> || std::is_same_v<T, std::string>,
+                      "Unsupported type for to_string_custom");
         return std::to_string(value);
     }
 }
+```
+
+For new code, prefer [C++20 concepts](09_templates.md) over trait-based SFINAE — clearer errors and simpler signatures:
+
+```cpp
+template<std::integral T>
+T process(T value) { return value * 2; }
+
+template<std::floating_point T>
+T process(T value) { return value * 1.5; }
 ```
 
 ---
@@ -379,7 +412,9 @@ std::string to_string_custom(const T& value) {
 
 ### Expression SFINAE
 ```cpp
+#include <iostream>
 #include <type_traits>
+#include <vector>
 
 // Detect if type has begin() and end()
 template<typename T, typename = void>
@@ -411,6 +446,8 @@ int main() {
     return 0;
 }
 ```
+
+⚠️ **Gotchas**: SFINAE errors are often deep template instantiation traces. When constraints express intent, use [concepts](09_templates.md) instead of `std::enable_if_t`. The [detection idiom](https://en.cppreference.com/w/cpp/experimental/is_detected) (`std::void_t` + partial specialization) remains useful for type traits.
 
 ### std::void_t Trick
 ```cpp
@@ -650,12 +687,14 @@ void my_advance(Iter& it, int n) {
 
 ### Why constexpr is Better
 ```cpp
-// BAD: Macro (no type safety)
-#define SQUARE(x) ((x) * (x))
+// BAD: Macro (no type safety, textual substitution)
+#define SQUARE(x) x * x          // note: NO inner parentheses
 
 int main() {
-    int result1 = SQUARE(5);      // OK: 25
-    int result2 = SQUARE(2 + 3);  // 11, not 25! (expands to (2+3)*(2+3))
+    int result1 = SQUARE(5);      // OK: 5 * 5 = 25
+    int result2 = SQUARE(2 + 3);  // 11, NOT 25! expands to 2 + 3 * 2 + 3
+    // Adding parentheses — #define SQUARE(x) ((x) * (x)) — fixes THIS bug,
+    // but a macro still double-evaluates its argument: SQUARE(i++) is UB.
 }
 
 // GOOD: constexpr (type-safe)
@@ -831,11 +870,14 @@ void func(T value) {
 
 ### 1. ODR Violations with constexpr
 ```cpp
-// Header file - OK
+// Header file - OK: one shared object across all TUs (C++17)
 inline constexpr int value = 42;
 
-// BAD: Non-inline in header
-// constexpr int value = 42;  // ODR violation if included in multiple TUs
+// Non-inline in a header is NOT an ODR violation: a namespace-scope
+// constexpr variable is implicitly const and therefore has INTERNAL linkage,
+// so every TU gets its own private copy. That wastes storage and means the
+// address differs per TU — use `inline` to get a single shared definition.
+// constexpr int value = 42;
 ```
 
 ### 2. Forgetting static_assert
@@ -1276,10 +1318,22 @@ All expensive computations run at compile time - zero runtime cost!
 
 ---
 
+## Related Topics
+
+- [Templates](09_templates.md) — variadic templates, concepts, and template specialization underpin TMP
+- [Modern Features](07_modern_features.md) — `constexpr` variables, `if constexpr`, fold expressions, designated init
+- [Lambdas](10_lambdas.md) — `constexpr` lambdas; generic lambdas as lightweight compile-time helpers
+- [Advanced Features](12_advanced_features.md) — `if constexpr` with value categories; `inline` variables (C++17)
+- [Best Practices](13_best_practices.md) — prefer `constexpr` over macros; limit template bloat
+- [Utility Containers](08_utility_containers.md) — `std::optional`, `std::variant` for type-safe compile-time-friendly APIs
+- [Quick Reference](99_quick_reference.md) — common type traits and `constexpr` patterns
+
+---
+
 ## Next Steps
 - **Next**: [Advanced C++ Features →](12_advanced_features.md)
 - **Previous**: [← Lambdas](10_lambdas.md)
 
 ---
-*Part 11 of 22 - Template Metaprogramming*
+*Chapter 11 — Template Metaprogramming*
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Memory management is crucial for performance and correctness in C++. This chapter covers allocators, polymorphic memory resources (PMR), memory alignment, and custom memory management strategies.
+Memory management is crucial for performance and correctness in C++. This chapter covers the [Allocator](https://en.cppreference.com/w/cpp/named_req/Allocator) requirements, `std::allocator_traits`, polymorphic memory resources (PMR), alignment, placement new, and pool strategies. Containers that accept allocators are covered in [Sequence Containers](01_sequence_containers.md) and [Utility Containers](08_utility_containers.md).
 
 ```
 ┌───────────────────────────────────────────────────────┐
@@ -29,10 +29,14 @@ Memory management is crucial for performance and correctness in C++. This chapte
 
 ## Standard Allocators
 
-### std::allocator
+### std::allocator and allocator_traits
+
+Custom allocators should implement the Allocator named requirements; prefer `std::allocator_traits<Alloc>` to call `allocate`, `deallocate`, `construct`, and `destroy` so your allocator works with pre-C++17 and stateful allocators.
+
 ```cpp
-#include <memory>
 #include <iostream>
+#include <limits>
+#include <memory>
 
 int main() {
     std::allocator<int> alloc;
@@ -92,9 +96,11 @@ Memory Management Phases:
 
 ### Custom Allocator
 ```cpp
-#include <memory>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <memory>
+#include <vector>
 
 template<typename T>
 class LoggingAllocator {
@@ -146,20 +152,37 @@ int main() {
 }
 ```
 
+### Stateful Allocators and Propagation
+
+Some allocators carry state (arena pointer, pool identity). Container copy/move/swap behavior is controlled by traits:
+
+| Trait | Effect when `true` |
+|-------|-------------------|
+| `propagate_on_container_copy_assignment` | Copying a container copies its allocator |
+| `propagate_on_container_move_assignment` | Moving transfers allocator ownership |
+| `propagate_on_container_swap` | `swap` also swaps allocators |
+| `is_always_equal` | All instances interchangeable (e.g. `std::allocator`) |
+
+Mismatching allocators on `deallocate` is undefined behavior — always pair `allocate`/`deallocate` through the same allocator instance.
+
 ---
 
 ## Polymorphic Memory Resources (PMR - C++17)
 
+PMR decouples *what* allocates from *how* via `std::pmr::memory_resource`. `std::pmr::polymorphic_allocator<T>` is the type-erased allocator adapters use internally; pass a `memory_resource*` to PMR containers (`std::pmr::vector`, `std::pmr::string`).
+
 ### Memory Resources
 ```cpp
+#include <iostream>
 #include <memory_resource>
 #include <vector>
-#include <iostream>
 
 int main() {
-    // Default resource (usually uses new/delete)
+    // Default resource (global new/delete)
     std::pmr::memory_resource* default_resource = 
-        std::pmr::get_default_resource();
+        std::pmr::new_delete_resource();
+    
+    // Or: std::pmr::get_default_resource() (may be redirected via set_default_resource)
     
     // Monotonic buffer resource (fast, no deallocation)
     char buffer[1024];
@@ -208,10 +231,14 @@ int main() {
 ```
 
 ### PMR Container Performance
+
+Use [Time and Chrono](18_time_chrono.md) with `steady_clock` when benchmarking — PMR wins are often visible only under allocation-heavy workloads.
+
 ```cpp
+#include <chrono>
+#include <iostream>
 #include <memory_resource>
 #include <vector>
-#include <chrono>
 
 void benchmark_pmr() {
     using namespace std::chrono;
@@ -249,10 +276,12 @@ void benchmark_pmr() {
 
 ## Alignment
 
+Objects have natural alignment (`alignof(T)`). SIMD, atomics, and hardware interfaces may need stricter alignment via `alignas`. Over-aligned types (`alignas(N)` where `N > alignof(T)`) may require `operator new`/`delete` overloads or `std::aligned_alloc`.
+
 ### Memory Alignment Basics
 ```cpp
-#include <iostream>
 #include <cstddef>
+#include <iostream>
 
 int main() {
     // Query alignment
@@ -278,25 +307,28 @@ int main() {
 }
 ```
 
-### Aligned Allocation (C++17)
+### Aligned Allocation and std::align
 ```cpp
+#include <cstddef>
 #include <cstdlib>
 #include <new>
 
 int main() {
-    // C++17: aligned_alloc
-    void* p1 = std::aligned_alloc(64, 256);  // 256 bytes, 64-byte aligned
-    if (p1) {
-        // Use aligned memory
-        std::free(p1);
-    }
+    // C17/C++17: aligned_alloc — size must be a multiple of alignment
+    void* p1 = std::aligned_alloc(64, 256);
+    if (p1) std::free(p1);
     
-    // Over-aligned new (C++17)
+    // std::align: bump a pointer within an existing buffer
+    alignas(std::max_align_t) unsigned char buffer[128];
+    void* ptr = buffer;
+    std::size_t space = sizeof(buffer);
+    void* aligned = std::align(32, 64, ptr, space);  // 64 bytes at 32-byte boundary
+    
     struct alignas(64) OverAligned {
         char data[64];
     };
     
-    OverAligned* p2 = new OverAligned;  // Automatically aligned to 64 bytes
+    OverAligned* p2 = new OverAligned;
     delete p2;
     
     return 0;
@@ -322,10 +354,14 @@ Padding ensures aligned access (faster on most architectures)
 
 ## Placement New
 
+Placement `new` constructs an object in *existing* storage — it does **not** allocate. You **must** call the destructor manually (`ptr->~T()`); there is no `delete` for placement-new objects.
+
+⚠️ **Gotchas**: If you reconstruct over live storage, use `std::launder` (C++17) to obtain a valid pointer to the new object; without it, the compiler may assume the old object still lives ([Advanced Features](12_advanced_features.md)).
+
 ### Manual Object Construction
 ```cpp
-#include <new>
 #include <iostream>
+#include <new>
 
 class Widget {
     int value_;
@@ -458,7 +494,7 @@ int main() {
 ```
 Object Pool:
 ┌────────────────────────────────────────────────────┐
-│ Pool Storage:      [obj1][obj2][obj3][obj4][obj5] │
+│ Pool Storage:      [obj1][obj2][obj3][obj4][obj5]  │
 │                      ▲     ▲                       │
 │                      │     │                       │
 │ Available List:    [ptr1][ptr2]                    │
@@ -483,6 +519,7 @@ Benefits:
 ```cpp
 #include <array>
 #include <cstddef>
+#include <vector>
 
 template<typename T, size_t N>
 class StackAllocator {
@@ -777,6 +814,15 @@ alloc.deallocate(p, 10);  // GOOD
 int* p = new int(42);
 delete p;
 int x = *p;  // UB: Use after free!
+```
+
+### 4. std::launder After In-Place Reconstruction
+```cpp
+alignas(T) unsigned char buf[sizeof(T)];
+T* p = new (buf) T(1);
+p->~T();
+T* q = new (buf) T(2);
+// T* valid = std::launder(q);  // Required if optimizer could see stale p
 ```
 
 ---
@@ -1213,26 +1259,29 @@ int main() {
 ```
 
 ### Concepts Demonstrated:
-- **Custom allocators**: Logging and tracking allocations
+- **allocator_traits**: Portable allocator interface
+- **PMR / polymorphic_allocator**: Type-erased memory resources
 - **Object pools**: Reusing memory for frequent allocations
-- **PMR (polymorphic memory resources)**: Stack-based allocation
 - **Monotonic buffer resource**: Fast frame-local allocations
-- **Stack allocators**: Fixed-size stack memory
-- **Placement new**: Manual construction in memory
-- **RAII**: Automatic cleanup of resources
-- **Memory statistics**: Tracking allocations and leaks
-- **Game-style memory management**: Pools + frame allocators
-- **Alignment**: Proper memory alignment
-- **Move semantics**: Efficient resource transfer
-
-This example shows production-ready memory management for performance-critical applications!
+- **Placement new / manual destroy**: In-buffer construction
+- **Alignment**: `alignas`, `std::align`, over-aligned types
 
 ---
+
+## Related Topics
+
+- [Sequence Containers](01_sequence_containers.md) — `vector` allocator template parameter
+- [Utility Containers](08_utility_containers.md) — `optional`, `variant` storage semantics
+- [Templates](09_templates.md) — writing reusable allocator-aware templates
+- [Best Practices](13_best_practices.md) — smart pointers, RAII, and sanitizers
+- [Multithreading](14_multithreading.md) — `synchronized_pool_resource` for concurrent pools
+- [Time and Chrono](18_time_chrono.md) — benchmarking allocation strategies
+- [Quick Reference](99_quick_reference.md) — allocator and PMR API summary
 
 ## Next Steps
 - **Next**: [Regular Expressions →](20_regex.md)
 - **Previous**: [← Time and Chrono](18_time_chrono.md)
 
 ---
-*Part 19 of 22 - Memory Management and Allocators*
+*Chapter 19 — Memory Management and Allocators*
 

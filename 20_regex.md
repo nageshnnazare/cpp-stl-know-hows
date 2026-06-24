@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++11 introduced the `<regex>` library for pattern matching and text processing. This chapter covers regex syntax, matching, searching, replacing, and performance considerations.
+C++11 introduced the `<regex>` library for pattern matching and text processing. **Important**: `std::regex` is notoriously slow compared to RE2, Hyperscan, or compile-time [ctre](https://github.com/hanickadot/ctre); pathological patterns can cause catastrophic backtracking or even stack overflow. Use it for moderate workloads; reach for alternatives in hot paths. This chapter covers ECMAScript syntax (the default grammar), matching, searching, replacing, and iterators.
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -30,9 +30,12 @@ C++11 introduced the `<regex>` library for pattern matching and text processing.
 ## Regex Basics
 
 ### Creating Regex Objects
+
+Default grammar is `std::regex::ECMAScript`. Use raw string literals `R"(...)"` to avoid double-escaping backslashes.
+
 ```cpp
-#include <regex>
 #include <iostream>
+#include <regex>
 
 int main() {
     // Basic regex
@@ -41,9 +44,11 @@ int main() {
     // With flags
     std::regex case_insensitive("HELLO", std::regex::icase);
     
-    // Different grammar
-    std::regex ecma_pattern("\\d+", std::regex::ECMAScript);  // Default
-    std::regex basic_pattern("\\d+", std::regex::basic);
+    // Different grammar — note the metacharacters differ per grammar!
+    std::regex ecma_pattern("\\d+", std::regex::ECMAScript);  // Default; \d works
+    // POSIX BRE/ERE do NOT support \d; use [0-9]. In BRE, + is literal unless \+,
+    // so use [0-9][0-9]* for "one or more digits".
+    std::regex basic_pattern("[0-9][0-9]*", std::regex::basic);
     std::regex extended_pattern("[0-9]+", std::regex::extended);
     
     // Optimize for repeated use
@@ -88,6 +93,8 @@ int main() {
 ---
 
 ## regex_match - Full String Matching
+
+`std::regex_match` requires the **entire** input to match. Use for validation; use `std::regex_search` to find a pattern anywhere in a string. Results land in `std::smatch` (or `std::cmatch` for C-strings).
 
 ### Basic Matching
 ```cpp
@@ -169,6 +176,8 @@ int main() {
 
 ## regex_search - Finding Patterns
 
+`std::regex_search` finds the first match anywhere in the input. Use `std::sregex_iterator` / `std::cregex_iterator` to enumerate all matches.
+
 ### Basic Search
 ```cpp
 #include <regex>
@@ -229,6 +238,8 @@ int main() {
 ---
 
 ## regex_replace - Substitution
+
+Replacement strings use `$1`, `$2`, … for capture groups (`$$` for a literal `$`).
 
 ### Basic Replacement
 ```cpp
@@ -515,44 +526,32 @@ int main() {
 
 ## Performance Considerations
 
-### Regex Compilation Cost
+`std::regex` compiles patterns into a backtracking engine — compilation is expensive, matching can be very slow, and nested quantifiers like `(a+)+b` risk exponential time or stack overflow on long inputs.
+
 ```
 ┌────────────────────────────────────────────────────────┐
 │              Regex Performance Tips                    │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
-│ 1. Compile Once, Use Many Times:                       │
-│    BAD:  for (...) { std::regex r("pattern"); ... }    │
-│    GOOD: std::regex r("pattern");                      │
-│          for (...) { std::regex_match(..., r); }       │
-│                                                        │
-│ 2. Use std::regex::optimize:                           │
-│    std::regex r("pattern", std::regex::optimize);      │
-│    • Slower compilation, faster execution              │
-│                                                        │
-│ 3. Avoid Catastrophic Backtracking:                    │
-│    BAD:  (a+)+b                                        │
-│    GOOD: a+b                                           │
-│                                                        │
-│ 4. Use Non-Capturing Groups:                           │
-│    (?:pattern) instead of (pattern) when not needed    │
-│                                                        │
-│ 5. Anchor Patterns:                                    │
-│    ^pattern$ is faster than pattern for full match     │
-│                                                        │
-│ 6. Consider Alternatives:                              │
-│    • string::find() for simple substring search        │
-│    • Hand-written parser for complex cases             │
+│ 1. Compile once, use many times (store std::regex)     │
+│ 2. std::regex::optimize — slower compile, faster match │
+│ 3. Avoid catastrophic backtracking: (a+)+ → a+         │
+│ 4. Use (?:…) non-capturing groups when possible        │
+│ 5. For full-string checks, anchor: ^pattern$           │
+│ 6. Simple substring? Use string::find / starts_with    │
+│ 7. Hot path? Consider RE2, ctre, or a hand parser      │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
 
+Benchmark with [steady_clock](18_time_chrono.md):
+
 ### Benchmarking Example
 ```cpp
-#include <regex>
-#include <string>
 #include <chrono>
 #include <iostream>
+#include <regex>
+#include <string>
 
 void benchmark_regex() {
     using namespace std::chrono;
@@ -641,13 +640,10 @@ const int MONTH = 2;
 const int DAY = 3;
 ```
 
-### 3. Validate Input
+### 3. Validate Input Length
 ```cpp
 bool is_safe_input(const std::string& input) {
-    // Check for suspicious patterns that might cause
-    // catastrophic backtracking
     if (input.size() > 10000) return false;
-    // Add more checks as needed
     return true;
 }
 ```
@@ -680,14 +676,14 @@ std::regex pattern("example.com");  // Matches "exampleXcom"
 std::regex pattern(R"(example\.com)");
 ```
 
-### 2. Catastrophic Backtracking
+### 2. Catastrophic Backtracking and Stack Overflow
 ```cpp
-// BAD: Exponential time complexity
+// BAD: exponential backtracking; may hang or overflow stack
 std::regex bad(R"((a+)+b)");
-std::string input(30, 'a');  // No 'b' at end
-// Takes forever to fail!
+std::string input(30, 'a');
+std::regex_search(input, bad);  // painfully slow
 
-// GOOD: Linear time
+// GOOD: linear
 std::regex good(R"(a+b)");
 ```
 
@@ -699,20 +695,22 @@ std::regex pattern("\\w+", std::regex::optimize);
 
 ---
 
-## Alternatives to Regex
+## Alternatives to std::regex
 
-When regex might not be the best choice:
+When `std::regex` is too slow or unsafe:
+
+| Library | Notes |
+|---------|-------|
+| [RE2](https://github.com/google/re2) | Linear-time, no backtracking; widely used in production |
+| [ctre](https://github.com/hanickadot/ctre) | Compile-time regex; zero runtime compilation |
+| `string::find` / `starts_with` | [Modern C++ Features](07_modern_features.md) for simple cases |
+| Dedicated parser | Log/CSV/binary formats — often clearer than regex |
 
 ```cpp
-// Simple substring search: Use string::find
+// Simple substring search
 if (text.find("substring") != std::string::npos) { /* ... */ }
 
-// Simple prefix/suffix: Use string methods
-if (text.starts_with("prefix")) { /* ... */ }  // C++20
-if (text.ends_with("suffix")) { /* ... */ }    // C++20
-
-// Tokenization: Use string_view or istringstream
-// Complex parsing: Consider dedicated parser libraries
+if (text.starts_with("prefix")) { /* C++20 */ }
 ```
 
 ---
@@ -850,7 +848,7 @@ public:
     }
     
     std::string mask_ssn(const std::string& text) const {
-        return std::regex_replace(text, ssn_pattern_, "***-**-$1");
+        return std::regex_replace(text, ssn_pattern_, "***-**-****");
     }
     
     // Find IP addresses
@@ -1124,28 +1122,28 @@ int main() {
 ```
 
 ### Concepts Demonstrated:
-- **regex_match**: Full string validation
-- **regex_search**: Finding patterns in text
-- **regex_replace**: Substitution and transformation
-- **regex_iterator**: Finding all occurrences
-- **Capture groups**: Extracting sub-patterns
-- **Raw string literals**: `R"(...)"` for patterns
-- **Compiled regex**: Compile once, use many times
-- **Phone number formatting**: Extracting and reformatting
-- **Data masking**: Security and privacy
-- **HTML/text cleaning**: Removing tags, normalizing
-- **CSV parsing**: Handling quoted fields
-- **Social media parsing**: Hashtags and mentions
-- **Multiple patterns**: Different regex for different data
-
-This example shows real-world regex applications for data validation and parsing!
+- **regex_match / regex_search / regex_replace**: Core API
+- **smatch / capture groups**: `match[i]` and `$1` back-references
+- **sregex_iterator / sregex_token_iterator**: All matches and tokenization
+- **Raw string literals**: Readable patterns
+- **Compile once**: Member `std::regex` fields
 
 ---
+
+## Related Topics
+
+- [I/O & Filesystem](16_io_filesystem.md) — reading log files and text streams to parse
+- [Algorithms](06_algorithms.md) — `std::search`, `std::find` for simpler matching
+- [Modern C++ Features](07_modern_features.md) — `starts_with`, `ends_with`, `string_view`
+- [Lambdas](10_lambdas.md) — `regex_replace` with formatter lambdas
+- [Time and Chrono](18_time_chrono.md) — benchmarking regex vs alternatives
+- [Best Practices](13_best_practices.md) — input validation and defensive parsing
+- [Quick Reference](99_quick_reference.md) — regex API summary
 
 ## Next Steps
 - **Next**: [Modules →](21_modules.md)
 - **Previous**: [← Memory Management](19_memory_allocators.md)
 
 ---
-*Part 20 of 22 - Regular Expressions*
+*Chapter 20 — Regular Expressions*
 

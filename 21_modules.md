@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++20 introduced modules as a modern alternative to header files. Modules provide faster compilation, better encapsulation, and eliminate many preprocessor-related issues.
+C++20 introduced modules as a modern alternative to header files. Modules can speed compilation, improve encapsulation via `export`, and reduce macro leakage — but **tooling is still maturing**. Build systems must compile module interface units before importers, and support varies across GCC 14/15, Clang, MSVC, and especially Apple Clang/libc++. This chapter covers interface vs implementation units, partitions, the global module fragment, `import std` (C++23), and migration strategies.
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -113,16 +113,19 @@ int main() {
 ```
 
 ### Compilation
+
+**Order matters**: compile partitions → primary interface → importers. Flags differ by compiler:
+
 ```bash
-# Compile module interface (creates BMI - Binary Module Interface)
-g++ -std=c++20 -fmodules-ts -c math.cppm -o math.o
+# GCC 14+ (modules; -fmodules-ts on older GCC)
+g++ -std=c++20 -c math.cppm -o math.o
+g++ -std=c++20 main.cpp math.o -o program
 
-# Compile main (uses BMI)
-g++ -std=c++20 -fmodules-ts main.cpp math.o -o program
-
-# Run
-./program
+# MSVC: /interface for .cppm, /reference for BMI
+# Clang: -std=c++20 -fprebuilt-module-path=...
 ```
+
+Use CMake 3.28+ `FILE_SET CXX_MODULES` when possible; verify your toolchain's module docs before adopting in production.
 
 ---
 
@@ -175,9 +178,13 @@ export template<typename T>
 concept Numeric = std::is_arithmetic_v<T>;
 ```
 
-### Implementation
+### Implementation Unit vs Interface Unit
+
+- **Module interface unit**: begins with `export module name;` — defines the public API (BMI).
+- **Module implementation unit**: begins with `module name;` (no `export`) — internal definitions linked with the interface.
+
 ```cpp
-// geometry.cppm
+// geometry.cppm — interface unit
 export module geometry;
 
 export class Rectangle {
@@ -188,20 +195,14 @@ private:
     double width_, height_;
 };
 
-// Definitions in same file (module interface)
-Rectangle::Rectangle(double w, double h) 
-    : width_(w), height_(h) {}
+// geometry_impl.cpp — implementation unit
+module geometry;
 
-double Rectangle::area() const {
-    return width_ * height_;
-}
-
-// Or separate implementation file
-// geometry_impl.cpp
-module geometry;  // Implementation unit
-
-// More implementations...
+Rectangle::Rectangle(double w, double h) : width_(w), height_(h) {}
+double Rectangle::area() const { return width_ * height_; }
 ```
+
+Definitions may also live inline in the interface unit (common for small modules).
 
 ---
 
@@ -274,55 +275,48 @@ export int public_function() {
 
 ## Importing Standard Library
 
-### Header Units
+### Header Units (C++20)
 ```cpp
-// Import standard library as header units
 import <vector>;
 import <string>;
 import <iostream>;
-
-int main() {
-    std::vector<std::string> names = {"Alice", "Bob"};
-    
-    for (const auto& name : names) {
-        std::cout << name << '\n';
-    }
-    
-    return 0;
-}
 ```
 
-### Standard Library Modules (Future)
+Header units bridge legacy `#include` headers into the module system. They still pull in macro pollution from C headers — prefer true modules where available.
+
+### `import std` (C++23)
+
+C++23 standardizes `import std;` for the entire standard library as a module (MSVC ships `std.ixx`; GCC/libc++ support is evolving). Check `__cpp_lib_modules` and your compiler version.
+
 ```cpp
-// C++23 and beyond (proposal)
-import std;  // Import entire standard library as module
+import std;  // C++23 — entire standard library
 
 int main() {
     std::vector<int> vec = {1, 2, 3};
     std::cout << "Hello, modules!\n";
-    
-    return 0;
 }
 ```
+
+⚠️ **Gotchas**: Apple Clang often lags on `import std` and PMF modules; many projects still mix `import <vector>;` or `#include` via the global module fragment.
 
 ---
 
 ## Mixing Modules and Headers
 
 ### Global Module Fragment
-```cpp
-// mymodule.cppm
-module;  // Start global module fragment
 
-// Include headers here (before module declaration)
+The global module fragment (`module;` … `export module …;`) is the only place to `#include` legacy headers before the module purview begins. Headers included here are not exported unless you re-export symbols.
+
+```cpp
+module;  // global module fragment — #includes allowed here
+
 #include <vector>
 #include <string>
 
-export module mymodule;  // End global fragment, start module
+export module mymodule;
 
-// Use imported headers
 export class MyClass {
-    std::vector<std::string> data_;  // OK: vector included above
+    std::vector<std::string> data_;
 };
 ```
 
@@ -553,7 +547,7 @@ Modules:
 │    ↓                                             │
 │ Compile once → BMI (Binary Module Interface)     │
 │                 ↓                                │
-│    ┌────────────┼────────────┐                   │
+│    ┌────────────┼─────────────┐                  │
 │    ↓            ↓             ↓                  │
 │ main.cpp    lib.cpp      util.cpp                │
 │    ↓            ↓             ↓                  │
@@ -629,21 +623,16 @@ export module wrapper;
 
 ### Gradual Migration
 ```cpp
-// Step 1: Keep headers, create modules alongside
-// header.h
-class Widget {
-    // ...
-};
-
-// module.cppm
+// Step 1: Wrap existing header via global module fragment
+module;
+#include "header.h"
 export module mymodule;
-#include "header.h"  // Wrap existing header
 export using ::Widget;
 
-// Step 2: Importers use modules
+// Step 2: Importers switch
 import mymodule;
 
-// Step 3: Eventually move implementation to module
+// Step 3: Move definitions into the module; delete the header
 ```
 
 ### Conversion Example
@@ -680,23 +669,21 @@ export namespace math {
 
 ## Compiler Support
 
-### As of 2024
+### As of 2025
 ```
 ┌────────────────────────────────────────────────────────┐
 │              Compiler Support Status                   │
 ├────────────────────────────────────────────────────────┤
-│ Compiler      │ Version  │ Support                     │
+│ Compiler      │ Version  │ Notes                       │
 ├───────────────┼──────────┼─────────────────────────────┤
-│ GCC           │ 11+      │ Good, improving             │
-│ Clang         │ 16+      │ Good                        │
-│ MSVC          │ 19.28+   │ Good                        │
+│ GCC           │ 14–15    │ Native modules improving    │
+│ Clang         │ 16+      │ Good; Apple Clang lags      │
+│ MSVC          │ 19.28+   │ Strong std module support   │
 │                                                        │
-│ Build Systems:                                         │
-│ • CMake 3.28+: Good module support                     │
-│ • Ninja: Module support                                │
-│ • Others: Varying support                              │
-│                                                        │
-│ Note: Module support is still evolving                 │
+│ Build: CMake 3.28+ FILE_SET CXX_MODULES                │
+│ Pitfall: compilation ORDER — interfaces before users   │
+│ Pitfall: mixing TUs that import modules and #include   │
+│          the same declarations → ODR violations        │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -747,38 +734,31 @@ export module mymodule;
 export constexpr int MY_CONSTANT = 42;
 ```
 
-### 3. Forgetting export
+### 3. ODR Violations During Migration
+```cpp
+// BAD: same symbols from header AND module in one link
+#include "math.h"
+import math;  // duplicate definitions at link time
+```
+
+### 4. Forgetting `export`
 ```cpp
 export module mymodule;
-
-// BAD: Not exported
-class MyClass {};
-
-// GOOD: Exported
-export class MyClass {};
+class MyClass {};        // module-internal only
+export class Public {};  // visible to importers
 ```
 
 ---
 
 ## Future Directions
 
-### Standard Library Modules (C++23)
+### Finer-Grained Standard Modules
 ```cpp
-// Proposed for C++23
-import std;           // All of std library
-import std.io;        // I/O components
-import std.containers;// Container components
+import std.io;          // Proposed/partitioned std modules
+import std.containers;
 ```
 
-### Module Macros (Proposed)
-```cpp
-// Better macro handling in modules
-export module mymodule;
-
-export {
-    #define PUBLIC_MACRO 1
-}
-```
+Module macro handling and broader libc++ module coverage remain active standardization and implementation work.
 
 ---
 
@@ -812,6 +792,8 @@ export namespace math {
 // Core partition
 
 export module math:core;
+
+import <stdexcept>;   // needed for std::invalid_argument (no #include in a module purview)
 
 export namespace math {
     // Basic operations
@@ -888,6 +870,13 @@ int main() {
 ```
 
 ### Compilation (GCC example):
+
+> The exact flags are compiler- and version-specific and still evolving.
+> Older GCC used `-fmodules-ts`; recent GCC (14/15) uses `-fmodules` and may
+> need a module mapper. Clang uses `-fmodules`/precompiled module interfaces,
+> and MSVC uses `/interface` / `/reference`. Always check your compiler's
+> current module docs.
+
 ```bash
 # Compile module partitions first
 g++ -std=c++20 -fmodules-ts -c math_core.cppm
@@ -927,57 +916,23 @@ target_link_libraries(main PRIVATE math_module)
 ```
 
 ### Key Concepts Demonstrated:
-1. **Module declaration**: `export module math;`
-2. **Module partitions**: `:core`, `:advanced`
-3. **Re-exporting**: `export import :core;`
-4. **Importing modules**: `import math;`
-5. **Importing headers as modules**: `import <iostream>;`
-6. **Export namespace**: Organizing exported symbols
-7. **Inline functions**: Definitions in module interface
-8. **Constants**: Exported compile-time constants
-9. **No header guards needed**: Built into modules
-10. **Compilation order**: Partitions → primary → users
-
-### Benefits Shown:
-- ✅ **Faster compilation**: No redundant parsing
-- ✅ **Better encapsulation**: Only exported symbols visible
-- ✅ **No macro leakage**: Clean interfaces
-- ✅ **Order independence**: Import order doesn't matter
-- ✅ **Scalability**: Easy to split into partitions
-
-### Module vs Header Comparison:
-
-**Traditional Headers (math.h)**:
-```cpp
-#ifndef MATH_H
-#define MATH_H
-
-namespace math {
-    int add(int a, int b);  // Declaration
-    int multiply(int a, int b);
-}
-
-#endif
-
-// math.cpp - separate implementation
-namespace math {
-    int add(int a, int b) { return a + b; }
-    int multiply(int a, int b) { return a * b; }
-}
-```
-
-**Modern Modules (math.cppm)**:
-```cpp
-export module math;
-
-export namespace math {
-    inline int add(int a, int b) { return a + b; }
-    inline int multiply(int a, int b) { return a * b; }
-}
-// No header guards, no separate .cpp needed for inline functions
-```
+1. **Interface vs implementation unit**: `export module` vs `module`
+2. **Partitions**: `:core`, `:advanced` with `export import`
+3. **Global module fragment**: `module;` + `#include` before `export module`
+4. **Compilation order**: partitions → primary → consumers
+5. **`import std`**: C++23 standard library module (where supported)
 
 ---
+
+## Related Topics
+
+- [Templates](09_templates.md) — exporting templates and concepts from modules
+- [Metaprogramming](11_metaprogramming.md) — constexpr interfaces in module units
+- [Advanced Features](12_advanced_features.md) — `consteval`, concepts with modules
+- [Best Practices](13_best_practices.md) — incremental migration and ODR safety
+- [OOP Concepts](00_oop_concepts.md) — encapsulation benefits vs headers
+- [Modern C++ Features](07_modern_features.md) — C++20 language baseline for modules
+- [Quick Reference](99_quick_reference.md) — module syntax cheat sheet
 
 ## Next Steps
 - **Next**: [Coroutines (C++20) →](22_coroutines.md)
@@ -985,7 +940,7 @@ export namespace math {
 - **Back to**: [Table of Contents](README.md)
 
 ---
-*Part 21 of 22 - Modules (C++20)*
+*Chapter 21 — Modules (C++20)*
 
-**Note**: Module support varies by compiler and build system. Check your toolchain's documentation for the latest features and syntax.
+**Note**: Module support varies by compiler and build system. Check feature-test macros (`__cpp_modules`, `__cpp_lib_modules`) and your toolchain docs before adopting.
 

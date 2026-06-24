@@ -2,7 +2,7 @@
 
 ## Overview
 
-This chapter consolidates best practices, common idioms, and guidelines for writing modern, efficient, and maintainable C++ code.
+This chapter consolidates best practices, common idioms, and guidelines for writing modern, efficient, and maintainable C++. It builds on [Advanced Features](12_advanced_features.md) (RAII, move semantics) and [Modern Features](07_modern_features.md) (`auto`, ranges).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -29,20 +29,8 @@ This chapter consolidates best practices, common idioms, and guidelines for writ
 ## Core Guidelines Highlights
 
 ### Use RAII for Resource Management
-```cpp
-// BAD: Manual resource management
-void process() {
-    int* data = new int[1000];
-    // ... processing ...
-    delete[] data;  // Easy to forget, exception unsafe
-}
 
-// GOOD: RAII with smart pointers or containers
-void process() {
-    std::vector<int> data(1000);
-    // ... processing ...
-}  // Automatically cleaned up
-```
+See [Advanced Features](12_advanced_features.md) for the full RAII treatment. Summary: acquire in constructor, release in destructor.
 
 ### Prefer `auto` for Type Deduction
 ```cpp
@@ -150,41 +138,12 @@ for (int i = 0; i < 10000; ++i) {
 ```
 
 ### Use Appropriate Containers
-```
-┌────────────────────────────────────────────────────────┐
-│              Container Selection Guide                 │
-├────────────────────────────────────────────────────────┤
-│ Need                  │ Use                            │
-├───────────────────────┼────────────────────────────────┤
-│ Random access         │ std::vector, std::array        │
-│ Insertion at ends     │ std::deque                     │
-│ Frequent middle ins.  │ std::list                      │
-│ Unique sorted         │ std::set                       │
-│ Key-value sorted      │ std::map                       │
-│ Unique unordered      │ std::unordered_set             │
-│ Key-value unordered   │ std::unordered_map             │
-│ LIFO                  │ std::stack                     │
-│ FIFO                  │ std::queue                     │
-│ Priority              │ std::priority_queue            │
-└────────────────────────────────────────────────────────┘
-```
+
+See [Sequence Containers](01_sequence_containers.md), [Associative Containers](02_associative_containers.md), [Unordered Containers](03_unordered_containers.md), and [Container Adaptors](04_container_adaptors.md) for detailed trade-offs.
 
 ### Prefer Algorithms over Loops
-```cpp
-std::vector<int> vec = {1, 2, 3, 4, 5};
 
-// BAD: Manual loop
-int sum = 0;
-for (int x : vec) {
-    sum += x;
-}
-
-// GOOD: Use algorithm
-int sum = std::accumulate(vec.begin(), vec.end(), 0);
-
-// BEST: Ranges (C++20)
-int sum = std::ranges::fold_left(vec, 0, std::plus{});
-```
+See [Algorithms](06_algorithms.md) and [Iterators](05_iterators.md). With C++20, prefer [ranges](07_modern_features.md) when they simplify the code.
 
 ---
 
@@ -247,31 +206,8 @@ public:
 ```
 
 ### RAII Wrapper Pattern
-```cpp
-// Wrap C resources with RAII
-class FileHandle {
-    FILE* file_;
-public:
-    explicit FileHandle(const char* filename, const char* mode)
-        : file_(fopen(filename, mode)) {
-        if (!file_) throw std::runtime_error("Failed to open file");
-    }
-    
-    ~FileHandle() { if (file_) fclose(file_); }
-    
-    // No copy
-    FileHandle(const FileHandle&) = delete;
-    FileHandle& operator=(const FileHandle&) = delete;
-    
-    // Allow move
-    FileHandle(FileHandle&& other) noexcept 
-        : file_(other.file_) {
-        other.file_ = nullptr;
-    }
-    
-    FILE* get() const { return file_; }
-};
-```
+
+Same pattern as [RAII in Advanced Features](12_advanced_features.md) — wrap C APIs (`FILE*`, sockets, handles) in a move-only class with a custom deleter or `unique_ptr` + function pointer deleter.
 
 ### Pimpl (Pointer to Implementation)
 ```cpp
@@ -307,17 +243,8 @@ void Widget::do_something() { pimpl_->do_something(); }
 ## Safety Best Practices
 
 ### Avoid Raw Pointers for Ownership
-```cpp
-// BAD: Who owns this? When to delete?
-int* create_data() {
-    return new int(42);
-}
 
-// GOOD: Clear ownership
-std::unique_ptr<int> create_data() {
-    return std::make_unique<int>(42);
-}
-```
+Use `std::unique_ptr` / `std::shared_ptr` with `make_unique` / `make_shared`. Raw pointers are fine as **non-owning** observers when lifetime is guaranteed. See [Advanced Features](12_advanced_features.md).
 
 ### Use `const` Liberally
 ```cpp
@@ -362,8 +289,9 @@ if (auto [iter, inserted] = map.insert({key, value}); inserted) {
 file.open("data.txt");
 file.write(data);
 
-// GOOD: Check for errors
-if (!file.open("data.txt")) {
+// GOOD: Check for errors (std::fstream::open returns void — test the stream)
+file.open("data.txt");
+if (!file) {
     std::cerr << "Failed to open file\n";
     return;
 }
@@ -450,23 +378,8 @@ public:
 ## Error Handling
 
 ### Prefer Exceptions for Errors
-```cpp
-// BAD: Error codes
-int open_file(const char* name, File& out) {
-    if (/* error */) return -1;
-    // ...
-    return 0;
-}
 
-// GOOD: Exceptions
-File open_file(const char* name) {
-    if (/* error */) {
-        throw std::runtime_error("Failed to open file");
-    }
-    // ...
-    return file;
-}
-```
+See [Exceptions](17_exceptions.md) for guarantees, `noexcept`, and when error codes are appropriate.
 
 ### Exception Safety Guarantees
 ```
@@ -474,7 +387,7 @@ File open_file(const char* name) {
 │            Exception Safety Levels                     │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
-│ 1. No-throw (noexcept)                                │
+│ 1. No-throw (noexcept)                                 │
 │    - Never throws exceptions                           │
 │    - Destructors, move operations, swap                │
 │                                                        │
@@ -661,16 +574,8 @@ void process(const std::vector<int>& data) {
 ```
 
 ### 3. Naked `new` and `delete`
-```cpp
-// BAD: Manual memory management
-int* data = new int[size];
-// ... use data ...
-delete[] data;
 
-// GOOD: Use containers or smart pointers
-std::vector<int> data(size);
-auto data2 = std::make_unique<int[]>(size);
-```
+Never use raw `new`/`delete` for ownership — use smart pointers or containers. Mark move operations `noexcept` so containers like `std::vector` use move during reallocation instead of copy.
 
 ### 4. Ignoring const-correctness
 ```cpp
@@ -696,29 +601,8 @@ public:
 ## Performance Measurement
 
 ### Basic Benchmarking
-```cpp
-#include <chrono>
 
-template<typename Func>
-auto measure_time(Func func) {
-    auto start = std::chrono::high_resolution_clock::now();
-    func();
-    auto end = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-}
-
-int main() {
-    auto duration = measure_time([]() {
-        // Code to benchmark
-        std::vector<int> vec(1000000);
-        std::sort(vec.begin(), vec.end());
-    });
-    
-    std::cout << "Time: " << duration.count() << "ms\n";
-    
-    return 0;
-}
-```
+See [Time & Chrono](18_time_chrono.md) for precise timing utilities.
 
 ---
 
@@ -989,9 +873,12 @@ public:
     
     // List all users (string_view parameter, no copying)
     void list_users(std::string_view prefix = "") const {
-        for (const auto& [user] : std::views::enumerate(
-            repository_.find_if([](const User&) { return true; }))) {
-            std::cout << prefix << "User " << user.name() 
+        // The index isn't needed here, so iterate the elements directly.
+        // (std::views::enumerate yields (index, element) pairs and is C++23,
+        // so a binding would have to be `[index, user]`, not `[user]`.)
+        for (const auto& user :
+             repository_.find_if([](const User&) { return true; })) {
+            std::cout << prefix << "User " << user.name()
                       << " (" << user.email().value() << ")\n";
         }
     }
@@ -1202,10 +1089,23 @@ This is a production-quality C++ application template!
 
 ---
 
-## Back to Start
+## Related Topics
+
+- [Advanced Features](12_advanced_features.md) — Rule of Zero, move semantics, smart pointers, noexcept moves
+- [Modern Features](07_modern_features.md) — `auto`, ranges, `optional`/`variant`, designated initializers
+- [Exceptions](17_exceptions.md) — exception safety guarantees, `noexcept`, error-handling strategy
+- [Algorithms](06_algorithms.md) — prefer STL algorithms over hand-written loops
+- [Lambdas](10_lambdas.md) — idiomatic callbacks; avoid `std::function` on hot paths
+- [I/O & Filesystem](16_io_filesystem.md) — RAII file handles, path best practices
+- [Multithreading](14_multithreading.md) — thread safety, lock guards, data-race avoidance
+
+---
+
+## Next Steps
+- **Next**: [Multithreading and Concurrency →](14_multithreading.md)
 - **Previous**: [← Advanced Features](12_advanced_features.md)
 - **Main**: [Main README](README.md)
 
 ---
-*Part 13 of 22 - Best Practices and Idioms*
+*Chapter 13 — Best Practices and Idioms*
 

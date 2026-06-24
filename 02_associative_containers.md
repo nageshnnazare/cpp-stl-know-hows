@@ -4,6 +4,12 @@
 
 Associative containers store elements in a sorted order based on keys. They use tree-based data structures (typically red-black trees) to provide logarithmic time complexity for most operations.
 
+> If you don't need sorted order or range queries, the hash-based
+> [unordered containers](03_unordered_containers.md) offer **O(1) average**
+> lookups instead of **O(log n)**. The choice between them is one of the most
+> common container decisions — see the
+> [decision tree in the Quick Reference](99_quick_reference.md#container-selection-guide).
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │         ASSOCIATIVE CONTAINERS FAMILY                │
@@ -621,7 +627,10 @@ int main() {
     auto [first, last] = grades.equal_range("Alice");
     std::cout << "All Alice's grades: ";
     for (auto it = first; it != last; ++it) {
-        std::cout << it->second << ' ';  // 85 88 92 (sorted by key, not value!)
+        // 85 92 88 — the container sorts by KEY only. Among equal keys,
+        // elements keep their INSERTION order (guaranteed since C++11),
+        // so values are NOT sorted.
+        std::cout << it->second << ' ';
     }
     std::cout << '\n';
     
@@ -629,10 +638,10 @@ int main() {
     for (const auto& [student, grade] : grades) {
         std::cout << student << ": " << grade << '\n';
     }
-    // Output:
+    // Output (keys sorted; values in insertion order within each key):
     // Alice: 85
-    // Alice: 88
     // Alice: 92
+    // Alice: 88
     // Bob: 78
     // Bob: 91
     // Charlie: 95
@@ -745,18 +754,19 @@ Memory          Higher              Moderate
 
 ```cpp
 #include <set>
-#include <memory>
+#include <memory_resource>   // std::pmr facilities live here
 
-// Use custom allocator
+// A set whose nodes are allocated through a PMR memory resource.
+// (std::pmr::set is a ready-made alias for exactly this.)
 template<typename T>
-using MySet = std::set<T, std::less<T>, 
+using MySet = std::set<T, std::less<T>,
                        std::pmr::polymorphic_allocator<T>>;
 
 int main() {
     std::pmr::monotonic_buffer_resource pool;
-    MySet<int> s(&pool);
-    // Uses custom memory pool
-    
+    // Pass the resource via the allocator; brace-init is the clearest form.
+    MySet<int> s{std::pmr::polymorphic_allocator<int>{&pool}};
+    s.insert(42);
     return 0;
 }
 ```
@@ -978,6 +988,7 @@ Here's a comprehensive example integrating `set`, `multiset`, `map`, and `multim
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <algorithm>   // std::find_if, std::count_if
 
 struct Student {
     int id;
@@ -1281,10 +1292,19 @@ This example shows real-world use of all associative containers!
 
 ---
 
+## Related Topics
+- [Unordered Containers](03_unordered_containers.md) — the hash-based counterparts; use them when you don't need ordering.
+- [Iterators](05_iterators.md) — these containers expose *bidirectional* iterators and the erase-while-iterating idiom shown above.
+- [Algorithms](06_algorithms.md) — `lower_bound`/`upper_bound`/`equal_range` also exist as free algorithms; prefer the *member* versions on these containers (O(log n) vs O(n)).
+- [Lambdas](10_lambdas.md) — custom comparators are usually written as lambdas or function objects.
+- [Memory Management & Allocators](19_memory_allocators.md) — the PMR allocator used in "Advanced Topics" is covered in depth here.
+- [Utility Containers](08_utility_containers.md) — `std::pair`/`std::tuple` underpin `map`/`multimap` values.
+- [Quick Reference](99_quick_reference.md) — complexity table and container decision tree.
+
 ## Next Steps
 - **Next**: [Unordered Containers →](03_unordered_containers.md)
 - **Previous**: [← Sequence Containers](01_sequence_containers.md)
 
 ---
-*Part 2 of 22 - Associative Containers*
+*Chapter 2 — Associative Containers*
 

@@ -25,7 +25,11 @@
 
 ## Overview
 
-The C++ Standard Template Library (STL) is a powerful collection of template classes and functions that provide generic implementations of common data structures and algorithms. This tutorial covers everything from C++98 to the latest C++23 standard.
+The C++ Standard Template Library (STL) is a powerful collection of template classes and functions that provide generic implementations of common data structures and algorithms. Its four core pillars are **containers**, **iterators**, **algorithms**, and **function objects** (with **allocators** underpinning memory management).
+
+> **A note on terminology.** Strictly speaking, the "STL" refers to the containers/iterators/algorithms/functors design that Alexander Stepanov contributed to C++. The **C++ Standard Library** is the broader entity standardized by ISO, and it also includes strings, I/O streams, threading, smart pointers, `std::format`, and much more. This tutorial uses "STL" loosely in its title but actually covers the whole modern Standard Library plus the core language features (OOP, templates, move semantics, coroutines, modules) you need to use it well — from C++98 through C++23.
+
+If you only read one page, make it the [Quick Reference cheat sheet](99_quick_reference.md). For a guided path, see the [Learning Path](#learning-path) below.
 
 ## Tutorial Structure
 
@@ -239,15 +243,22 @@ The C++ Standard Template Library (STL) is a powerful collection of template cla
 ```
 
 ## Prerequisites
-- Basic C++ knowledge
-- Understanding of templates
+- Basic C++ knowledge (variables, functions, control flow)
 - Familiarity with pointers and references
-- C++11 or later compiler (C++23 for latest features)
+- A C++11 or later compiler (C++23 for the latest features); see [Templates](09_templates.md) if generics are new to you
 
 ## Compiler Support
-- GCC 13+ (full C++23)
-- Clang 16+ (full C++23)
-- MSVC 19.35+ (partial C++23)
+
+C++23 support is still rolling out across toolchains. As a rule of thumb:
+
+| Toolchain | Recommended version | C++23 status |
+|-----------|--------------------|--------------|
+| GCC (libstdc++) | 14+ | Most library features; `import std;` from GCC 15 |
+| Clang (libc++) | 18+ | Broad core + library support; some library bits trail |
+| MSVC (STL) | VS 2022 17.10+ | Strong, growing C++23 coverage |
+| Apple Clang | Xcode 16+ | Lags upstream Clang; check feature-test macros |
+
+Compile examples with the right standard flag, e.g. `g++ -std=c++23 file.cpp` or `clang++ -std=c++23 file.cpp` (`/std:c++latest` on MSVC). When in doubt about a specific feature, check the [feature-test macros](https://en.cppreference.com/w/cpp/feature_test) (e.g. `__cpp_lib_format`) and [cppreference's compiler support table](https://en.cppreference.com/w/cpp/compiler_support).
 
 ## How to Use This Tutorial
 1. Start with sequence containers if you're new to STL

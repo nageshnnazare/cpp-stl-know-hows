@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++20 and C++23 introduced revolutionary changes to the STL, with ranges being the most significant addition. Ranges provide a more composable, efficient, and expressive way to work with sequences.
+C++20 and C++23 introduced revolutionary changes to the STL, with [ranges](https://en.cppreference.com/w/cpp/ranges) being the most significant addition. Ranges provide a more composable, efficient, and expressive way to work with sequences — see also [Iterators](05_iterators.md) and [Algorithms](06_algorithms.md) for the pre-ranges foundation they build on.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -116,13 +116,17 @@ int main() {
 }
 ```
 
+⚠️ **Gotchas**: Not every range algorithm accepts every range category. `std::ranges::sort` requires a [`random_access_range`](https://en.cppreference.com/w/cpp/ranges/random_access_range) — it will not compile on `std::list` or `std::forward_list`. Use `std::list::sort` member function or copy into a random-access container first. Mutating algorithms that reorder elements (`sort`, `reverse`, `rotate`) generally need stronger iterator requirements than read-only ones (`find`, `count`, `all_of`).
+
+💡 **Hunch**: Range algorithms take the range as the first argument and optional comparison/projection after — the same projection syntax shown later applies here.
+
 ---
 
 ## Views (C++20)
 
 ### What are Views?
 
-Views are lazy, composable range adaptors that don't own data and have O(1) copy/move operations.
+Views are **lazy**, **composable** range adaptors (also called adaptors) that don't own data and have O(1) copy/move operations. Chain them with the pipe operator `|`; nothing runs until you iterate or call a consuming algorithm.
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -250,6 +254,7 @@ int main() {
 │ join              | Flatten nested ranges              │
 │ split             | Split by delimiter                 │
 │ reverse           | Reverse order                      │
+│ iota              | Generate integer sequence          │
 │ elements          | Extract Nth element of tuples      │
 │ keys              | Extract keys from pairs            │
 │ values            | Extract values from pairs          │
@@ -270,100 +275,7 @@ int main() {
 └────────────────────────────────────────────────────────┘
 ```
 
-### views::filter
-```cpp
-#include <ranges>
-#include <vector>
-
-int main() {
-    std::vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    
-    // Filter even numbers
-    auto evens = vec | std::views::filter([](int x) { return x % 2 == 0; });
-    // Result: 2, 4, 6, 8, 10 (lazy view)
-    
-    // Filter with multiple conditions
-    auto filtered = vec | std::views::filter([](int x) { 
-        return x > 3 && x < 8; 
-    });
-    // Result: 4, 5, 6, 7
-    
-    return 0;
-}
-```
-
-### views::transform
-```cpp
-#include <ranges>
-#include <vector>
-#include <string>
-
-int main() {
-    std::vector<int> nums = {1, 2, 3, 4, 5};
-    
-    // Square all numbers
-    auto squares = nums | std::views::transform([](int x) { return x * x; });
-    // Result: 1, 4, 9, 16, 25
-    
-    // Convert to strings
-    auto strings = nums | std::views::transform([](int x) { 
-        return std::to_string(x); 
-    });
-    // Result: "1", "2", "3", "4", "5"
-    
-    return 0;
-}
-```
-
-### views::take and views::drop
-```cpp
-#include <ranges>
-#include <vector>
-
-int main() {
-    std::vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    
-    // Take first 5
-    auto first_5 = vec | std::views::take(5);
-    // Result: 1, 2, 3, 4, 5
-    
-    // Drop first 5
-    auto last_5 = vec | std::views::drop(5);
-    // Result: 6, 7, 8, 9, 10
-    
-    // Take while condition
-    auto take_small = vec | std::views::take_while([](int x) { return x < 6; });
-    // Result: 1, 2, 3, 4, 5
-    
-    // Drop while condition
-    auto drop_small = vec | std::views::drop_while([](int x) { return x < 6; });
-    // Result: 6, 7, 8, 9, 10
-    
-    return 0;
-}
-```
-
-### views::reverse
-```cpp
-#include <ranges>
-#include <vector>
-
-int main() {
-    std::vector<int> vec = {1, 2, 3, 4, 5};
-    
-    // Reverse view
-    auto reversed = vec | std::views::reverse;
-    // Result: 5, 4, 3, 2, 1
-    
-    // Compose with other views
-    auto last_3_reversed = vec 
-        | std::views::reverse 
-        | std::views::take(3);
-    // Result: 5, 4, 3
-    
-    return 0;
-}
-```
+`filter`, `transform`, `take`, `drop`, `take_while`, `drop_while`, and `reverse` are covered in **Basic Views** and **Composing Views** above. The sections below cover views with less obvious semantics.
 
 ### views::keys and views::values
 ```cpp
@@ -645,11 +557,72 @@ int main() {
 
 ---
 
+## Concepts and Constraints (C++20)
+
+Concepts name compile-time requirements on template parameters. They largely replace [SFINAE](09_templates.md) (`std::enable_if`) with readable constraints and far clearer error messages. Full template mechanics live in [Templates](09_templates.md); here we focus on using concepts with ranges and modern APIs.
+
+```cpp
+#include <concepts>
+#include <ranges>
+#include <vector>
+
+// Define a concept with 'concept' keyword
+template<typename T>
+concept Numeric = std::integral<T> || std::floating_point<T>;
+
+// Constrained template parameter (abbreviated syntax)
+template<Numeric T>
+T clamp_nonneg(T value) {
+    return value < T{0} ? T{0} : value;
+}
+
+// requires clause on template
+template<typename T>
+requires std::ranges::random_access_range<T>
+void sort_in_place(T& range) {
+    std::ranges::sort(range);
+}
+
+// requires expression — check that an operation is valid
+template<typename T>
+concept HasSize = requires(T t) {
+    { t.size() } -> std::convertible_to<std::size_t>;
+};
+
+// Constrained 'auto' parameter (abbreviated function template)
+void print_size(HasSize auto const& container) {
+    std::cout << container.size() << '\n';
+}
+
+// Standard library type constraint (no custom concept needed)
+template<std::integral T>
+T double_value(T x) { return x * 2; }
+
+int main() {
+    std::vector<int> v = {3, 1, 2};
+    sort_in_place(v);           // OK: vector is random_access_range
+    print_size(v);
+    // sort_in_place(std::list{1, 2, 3});  // ERROR: list fails random_access_range
+    return 0;
+}
+```
+
+| Mechanism | Example | Purpose |
+|-----------|---------|---------|
+| `concept` definition | `concept C = requires(T t) { ... };` | Name a requirement set |
+| `requires` clause | `template<typename T> requires C<T>` | Constrain a template |
+| `requires` expression | `requires { t.size(); }` | Check validity of expressions |
+| Abbreviated syntax | `template<std::integral T>` or `C auto& x` | Shorthand constraints |
+
+⚠️ **Gotchas**: Concepts are checked at the template interface — they do not replace runtime validation. `std::ranges::sort` still requires `random_access_range` even if your function template compiles for weaker ranges.
+
+---
+
 ## std::span (C++20)
 
 ### What is span?
 
-`std::span` is a non-owning view over a contiguous sequence of elements. It's like a reference to an array.
+[`std::span`](https://en.cppreference.com/w/cpp/container/span) is a **non-owning** view over a contiguous sequence of elements — essentially a pointer plus a length. Note that `operator[]` is **not** bounds-checked (out-of-range access is undefined behavior, just like a raw array); C++20 `span` has no `at()` member (one is added in C++26). It does not own memory; the underlying storage must outlive the span (same lifetime rules as [views](#views-c20) and [`std::string_view`](08_utility_containers.md)). Prefer `std::span` over raw pointer + size pairs in function parameters.
 
 ```cpp
 #include <span>
@@ -742,7 +715,7 @@ int main() {
 
 ## std::mdspan (C++23)
 
-Multi-dimensional span for matrices and tensors.
+[`std::mdspan`](https://en.cppreference.com/w/cpp/container/mdspan) is a **non-owning** multi-dimensional view over contiguous storage — the N-dimensional analogue of `std::span`. Layout and extents are part of the type; the backing buffer must outlive the `mdspan`.
 
 ```cpp
 #include <mdspan>
@@ -777,7 +750,7 @@ int main() {
 
 ### std::flat_set, std::flat_map
 
-Sorted containers backed by contiguous storage (like vector) instead of trees.
+Sorted containers backed by contiguous storage (like [vector](01_sequence_containers.md)) instead of trees — see [Associative Containers](02_associative_containers.md) for `std::set`/`std::map` semantics they mirror.
 
 ```cpp
 #include <flat_set>
@@ -806,9 +779,9 @@ int main() {
 
 ### Performance Comparison
 ```
-┌──────────────────────────────────────────────────────┐
-│           std::set vs std::flat_set                  │
-├──────────────────────────────────────────────────────┤
+┌────────────────────────────────────────────────────┐
+│           std::set vs std::flat_set                │
+├────────────────────────────────────────────────────┤
 │ Operation    │ std::set   │ std::flat_set          │
 ├──────────────┼────────────┼────────────────────────┤
 │ Search       │ O(log n)   │ O(log n) (faster)      │
@@ -817,7 +790,7 @@ int main() {
 │ Iteration    │ O(n)       │ O(n) (much faster)     │
 │ Memory       │ Higher     │ Lower                  │
 │ Cache        │ Poor       │ Excellent              │
-└──────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────┘
 
 Use flat_* when:
 ✓ More reads than writes
@@ -982,13 +955,20 @@ auto get_evens() {
     return vec | std::views::filter([](int x) { return x % 2 == 0; });
 }  // vec destroyed, view dangles!
 
-// GOOD: Return owned data or use span
+// BAD: View over a temporary rvalue
+auto evens = std::vector{1, 2, 3, 4, 5}
+    | std::views::filter([](int x) { return x % 2 == 0; });
+// Temporary vector destroyed at end of full-expression — evens dangles!
+
+// GOOD: Return owned data or materialize before the temporary dies
 std::vector<int> get_evens() {
     std::vector<int> vec = {1, 2, 3, 4, 5};
     auto view = vec | std::views::filter([](int x) { return x % 2 == 0; });
     return std::vector<int>(view.begin(), view.end());
 }
 ```
+
+Views borrow from their source range. Returning a view from a function that owns the source, or piping a temporary container without materializing, produces a **dangling view** — the same class of bug as dangling [`std::string_view`](08_utility_containers.md).
 
 ### 2. Modifying Through Views
 ```cpp
@@ -1383,10 +1363,22 @@ This example shows the power of modern C++ ranges and views!
 
 ---
 
+## Related Topics
+
+- [Algorithms](06_algorithms.md) — iterator-pair algorithms that ranges generalize; many have `std::ranges::` equivalents.
+- [Iterators](05_iterators.md) — iterator categories (`random_access`, `bidirectional`, …) determine which range algorithms compile.
+- [Templates](09_templates.md) — concepts, SFINAE, and variadic templates underpin constrained generic code.
+- [Lambdas](10_lambdas.md) — predicates and transforms passed to `views::filter`, `views::transform`, and range algorithms.
+- [Utility Containers](08_utility_containers.md) — `std::string_view` and `std::span` share the same non-owning lifetime model as views.
+- [Sequence Containers](01_sequence_containers.md) — `vector`/`array` are ideal backing stores for views and spans.
+- [Best Practices](13_best_practices.md) — when to materialize views vs keep pipelines lazy.
+
+---
+
 ## Next Steps
 - **Next**: [Utility Containers →](08_utility_containers.md)
 - **Previous**: [← Algorithms](06_algorithms.md)
 
 ---
-*Part 7 of 22 - Modern C++20/23 Features*
+*Chapter 7 — Modern C++20/23 Features*
 

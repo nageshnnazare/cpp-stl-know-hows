@@ -2,7 +2,7 @@
 
 ## Overview
 
-Lambda expressions (introduced in C++11) provide a concise way to create anonymous function objects. They're essential for modern C++ and functional programming.
+Lambda expressions (introduced in C++11) provide a concise way to create anonymous function objects — closures with optional capture of surrounding state. They are the standard way to pass behavior to [STL algorithms](06_algorithms.md) and to write inline callbacks without a separate functor type.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -135,6 +135,43 @@ int main() {
 }
 ```
 
+### `this`, Statics, and Globals
+
+```cpp
+class Widget {
+    int value_ = 42;
+
+public:
+    auto by_this() {
+        return [this]() { return value_; };      // captures Widget* (pointer)
+    }
+
+    auto by_copy() {
+        return [*this]() { return value_; };      // C++17: copies entire object
+    }
+
+    auto by_default() {
+        return [=]() { return value_; };           // implicit [this] — same as [this]
+    }
+};
+
+int global = 100;
+
+void demo() {
+    int local = 10;
+    static int s = 20;
+
+    auto f = [=]() { return local + s + global; };
+    // Captures: local (by value) — only automatic-storage locals are captured
+    // Does NOT capture: global, or the static local s (both accessed by name)
+}
+```
+
+⚠️ **Gotchas**
+- `[this]` stores a **pointer** to the enclosing object. If the lambda outlives `*this`, it dangles — same risk as a raw pointer. Prefer `[*this]` (C++17) when the lambda must survive the call that created it.
+- `[=]` and `[&]` in a member function implicitly capture `this` (as a pointer), not individual data members. Implicit `this` capture via `[=]` is **deprecated since C++20** (P0806) — write `[=, this]` (or `[this]`) explicitly.
+- Default captures (`[=]`/`[&]`) never capture `static` or global variables — those are accessed directly by name.
+
 ### Visual: Capture Behavior
 ```
 Original Variables:
@@ -153,8 +190,8 @@ Lambda object:
 ┌────┬────┐
 │ &x │ &y │  (pointers to originals)
 └────┴────┘
-     │    │
-     ▼    ▼
+   │    │
+   ▼    ▼
 ┌─────┬─────┐
 │ x=10│ y=20│  (original variables)
 └─────┴─────┘
@@ -193,6 +230,9 @@ int main() {
 
 ### Init Capture (C++14)
 ```cpp
+#include <memory>
+#include <vector>
+
 int main() {
     int x = 10;
     
@@ -267,6 +307,8 @@ References are always modifiable.
 
 ## Generic Lambdas (C++14)
 
+A generic lambda with `auto` parameters is a **function call operator template** — each distinct argument type set instantiates a new specialization. For explicit template parameters or concepts, use C++20 template lambdas (below) or see [Templates](09_templates.md).
+
 ### Auto Parameters
 ```cpp
 #include <iostream>
@@ -302,9 +344,14 @@ int main() {
 ```
 
 ### Template Lambda (C++20)
+
+C++14 generic lambdas (`auto` parameters) are implemented as a call operator template. C++20 adds **explicit** template parameters — useful when you need `T` in the capture clause or to constrain types (often with [concepts](09_templates.md)):
+
 ```cpp
-#include <vector>
 #include <iostream>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 int main() {
     // Explicit template parameters
@@ -321,11 +368,18 @@ int main() {
     print_container(v1);
     print_container(v2);
     
-    // Perfect forwarding in lambda
+    // Perfect forwarding — see [Advanced Features](12_advanced_features.md)
     auto forward_call = []<typename... Args>(Args&&... args) {
         return std::make_tuple(std::forward<Args>(args)...);
     };
-    
+
+    // C++20: capture a parameter pack by moving into the closure
+    auto make_tuple_moved = []<typename... Args>(Args&&... args) {
+        return [... args = std::forward<Args>(args)]() mutable {
+            return std::make_tuple(std::move(args)...);
+        };
+    };
+
     return 0;
 }
 ```
@@ -426,6 +480,7 @@ int main() {
 ### Lambda as Return Value
 ```cpp
 #include <functional>
+#include <iostream>
 
 // Return lambda from function
 auto make_adder(int n) {
@@ -742,7 +797,7 @@ int main() {
 ├───────────────────────────────────────────────────────┤
 │ Capture Type     │ Size        │ Performance          │
 ├──────────────────┼─────────────┼──────────────────────┤
-│ No capture       │ 1 byte      │ Best (empty)         │
+│ No capture       │ 0 bytes*    │ Best (stateless)     │
 │ By value (int)   │ sizeof(int) │ Good (inline)        │
 │ By reference     │ sizeof(ptr) │ Good (indirect)      │
 │ By value (large) │ sizeof(T)   │ Slow (copy)          │
@@ -750,6 +805,9 @@ int main() {
 └───────────────────────────────────────────────────────┘
 
 Tip: Capture only what you need!
+
+*Stateless lambdas have no storage; they can convert to function pointers.
+ Empty lambdas may still occupy 1 byte as a unique type (implementation-defined).
 ```
 
 ---
@@ -771,24 +829,21 @@ auto make_lambda_safe() {
 }
 ```
 
-### 2. Capturing this
+### 2. Capturing `this`
 ```cpp
 class Widget {
     int value_ = 42;
-    
+
 public:
-    auto make_lambda_bad() {
-        return [=]() {
-            return value_;  // Captures 'this', not 'value_'!
-        };
+    auto dangling() {
+        return [this]() { return value_; };  // Widget* — dangles if lambda outlives *this
     }
-    
-    auto make_lambda_good() {
-        return [*this]() {  // C++17: Capture by value
-            return value_;
-        };
+
+    auto safe_copy() {
+        return [*this]() { return value_; };  // C++17: snapshot of entire object
     }
 };
+// `[=]` in a member function is equivalent to `[=, this]` (C++20) / implicit `this` capture
 ```
 
 ### 3. Capture in Loops
@@ -1268,10 +1323,22 @@ This example shows how lambdas enable elegant functional programming in C++!
 
 ---
 
+## Related Topics
+
+- [Templates](09_templates.md) — generic lambdas are call-operator templates; C++20 adds explicit template parameters
+- [Algorithms](06_algorithms.md) — lambdas as predicates, comparators, and callbacks for `std::sort`, `std::for_each`, etc.
+- [Advanced Features](12_advanced_features.md) — perfect forwarding in template lambdas, move semantics, `std::function` overhead
+- [Modern Features](07_modern_features.md) — `std::variant` + overloaded lambdas, `constexpr` lambdas
+- [Best Practices](13_best_practices.md) — when to prefer a named function, capture hygiene, avoiding `std::function` hot paths
+- [Multithreading](14_multithreading.md) — capturing shared state; prefer value/init-capture over `[&]` across threads
+- [Quick Reference](99_quick_reference.md) — lambda syntax cheat sheet
+
+---
+
 ## Next Steps
 - **Next**: [Metaprogramming →](11_metaprogramming.md)
 - **Previous**: [← Templates](09_templates.md)
 
 ---
-*Part 10 of 22 - Lambdas and Functional Programming*
+*Chapter 10 — Lambdas and Functional Programming*
 

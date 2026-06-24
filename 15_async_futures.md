@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++ provides high-level abstractions for asynchronous programming through futures, promises, and async. These enable writing concurrent code without directly managing threads.
+C++ provides high-level abstractions for asynchronous programming through futures, promises, and `std::async`. These enable concurrent code without directly managing threads — though thread pools and `std::async` still depend on the primitives in [Multithreading](14_multithreading.md).
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -32,6 +32,8 @@ C++ provides high-level abstractions for asynchronous programming through future
 ### Basic Usage
 ```cpp
 #include <future>
+#include <thread>
+#include <chrono>
 #include <iostream>
 
 int calculate() {
@@ -67,15 +69,17 @@ int main() {
     // deferred: Run when get() is called (lazy evaluation)
     auto f2 = std::async(std::launch::deferred, work);
     
-    // async | deferred: Let implementation decide (default)
+    // async | deferred: Let implementation choose (default)
     auto f3 = std::async(std::launch::async | std::launch::deferred, work);
     
-    // Default policy
-    auto f4 = std::async(work);  // Same as f3
+    // Default policy — same as async | deferred
+    auto f4 = std::async(work);
     
     return 0;
 }
 ```
+
+⚠️ **Gotcha**: The `std::future` returned by `std::async` **blocks in its destructor** if the shared state is still asynchronous (i.e., you never called `get()` or `wait()`). This can stall shutdown unexpectedly. Always `get()`/`wait()` before letting the future go out of scope, or use `std::launch::deferred` if you control when work runs.
 
 ### Visual: async vs deferred
 ```
@@ -90,8 +94,10 @@ main thread:  ───────────►get()──────►
                    work runs in main thread
 
 std::launch::async | deferred (default):
-Implementation chooses based on system load
+Implementation chooses — may defer to get() or spawn a thread
 ```
+
+💡 **Hunch**: For real parallelism, pass `std::launch::async` explicitly. The default policy is a common source of "my code isn't running concurrently" bugs.
 
 ### async with Arguments
 ```cpp
@@ -228,6 +234,7 @@ int main() {
 ```cpp
 #include <future>
 #include <thread>
+#include <chrono>
 
 void calculate(std::promise<int> prom) {
     // Do work
@@ -313,6 +320,7 @@ int main() {
 ```cpp
 #include <future>
 #include <thread>
+#include <iostream>
 
 int calculate(int x) {
     return x * x;
@@ -422,6 +430,10 @@ Producer ──► Future ├──► Consumer 2
 
 ## Parallel Algorithms (C++17)
 
+Execution policies live in `<execution>`. `std::execution::par` and `par_unseq` may run operations concurrently — the callable must not introduce data races, deadlocks, or blocking I/O.
+
+On **libstdc++** (GCC), parallel policies require linking against Intel oneTBB (`-ltbb`) or the bundled libstdc++ parallel backend. libc++ support varies by version. If policies are unavailable, use feature-test macro `__cpp_lib_parallel_algorithm` or fall back to `std::execution::seq`.
+
 ### Execution Policies
 ```cpp
 #include <algorithm>
@@ -508,6 +520,8 @@ int main() {
 ---
 
 ## Thread Pools
+
+`std::async` creates a new thread (or defers) per call — expensive for many small tasks. A thread pool reuses worker threads and is the standard pattern for task queues. See [Multithreading](14_multithreading.md) for the mutex/condition-variable primitives this pattern builds on.
 
 ### Simple Thread Pool Implementation
 ```cpp
@@ -642,6 +656,8 @@ Benefits:
 ---
 
 ## Coroutines (C++20)
+
+Coroutines (`co_await`, `co_yield`, `co_return`) offer structured async control flow with very low overhead — ideal for generators and I/O-bound work. This is an introductory taste; see [Coroutines](22_coroutines.md) for promise types, awaitables, and production patterns.
 
 ### Basic Coroutine
 ```cpp
@@ -779,18 +795,18 @@ std::sort(std::execution::par, data.begin(), data.end());
 
 ## Common Pitfalls
 
-### 1. Blocking in Destructor
+### 1. Blocking in Destructor (std::async)
 ```cpp
-// BAD: Blocks in destructor
+// BAD: future destructor blocks until async task completes
 {
     auto future = std::async(std::launch::async, long_task);
-    // Destructor blocks until task completes!
+    // Leaving scope calls ~future(), which waits for the task!
 }
 
-// GOOD: Explicitly get or detach
+// GOOD: Explicitly get or wait before destruction
 {
     auto future = std::async(std::launch::async, long_task);
-    future.get();  // Or wait() if you don't need result
+    future.get();  // Or wait() if you don't need the result
 }
 ```
 
@@ -818,11 +834,10 @@ int result2 = shared.get();  // OK
 
 ### 4. Exception Handling
 ```cpp
-// BAD: Exception ignored
+// BAD: Exception stored in shared state; if never retrieved → std::terminate on ~future
 auto future = std::async(may_throw);
-// If exception thrown and never retrieved, program terminates
 
-// GOOD: Always get() and handle exceptions
+// GOOD: Always get() and handle exceptions — see [Exception Handling](17_exceptions.md)
 try {
     auto result = future.get();
 } catch (const std::exception& e) {
@@ -835,9 +850,9 @@ try {
 ## Performance Comparison
 
 ```
-┌────────────────────────────────────────────────────────┐
-│         Async Approach Performance                     │
-├────────────────────────────────────────────────────────┤
+┌───────────────────────────────────────────────────────┐
+│         Async Approach Performance                    │
+├───────────────────────────────────────────────────────┤
 │ Approach       │ Overhead │ Control │ Use case        │
 ├────────────────┼──────────┼─────────┼─────────────────┤
 │ std::async     │ Medium   │ Low     │ Simple tasks    │
@@ -845,7 +860,7 @@ try {
 │ Parallel algo  │ Low      │ None    │ STL operations  │
 │ Manual threads │ Low      │ High    │ Custom needs    │
 │ Coroutines     │ Very low │ High    │ Async I/O       │
-└────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -1150,9 +1165,10 @@ public:
     
     template<typename F, typename... Args>
     auto enqueue(F&& f, Args&&... args) 
-        -> std::future<typename std::result_of<F(Args...)>::type> {
-        
-        using return_type = typename std::result_of<F(Args...)>::type;
+        -> std::future<typename std::invoke_result<F, Args...>::type> {
+        // std::result_of was deprecated in C++17 and REMOVED in C++20;
+        // use std::invoke_result instead.
+        using return_type = typename std::invoke_result<F, Args...>::type;
         
         auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
@@ -1307,10 +1323,20 @@ This example shows real-world async programming patterns!
 
 ---
 
+## Related Topics
+
+- [Multithreading](14_multithreading.md) — `std::thread`, mutexes, and condition variables underlying pools and `std::async`
+- [Algorithms](06_algorithms.md) — STL algorithms that parallel policies accelerate (`sort`, `transform`, `reduce`)
+- [Coroutines](22_coroutines.md) — deep dive into `co_await`, promise types, and async I/O patterns
+- [Exception Handling](17_exceptions.md) — exception propagation through futures; `std::future_error`
+- [Lambdas](10_lambdas.md) — lambdas are the usual way to pass work to `std::async` and thread pools
+- [I/O and Filesystem](16_io_filesystem.md) — parallel file processing and I/O-bound async workloads
+- [Quick Reference](99_quick_reference.md) — async primitives at a glance
+
 ## Next Steps
 - **Next**: [I/O and Filesystem →](16_io_filesystem.md)
 - **Previous**: [← Multithreading](14_multithreading.md)
 
 ---
-*Part 15 of 22 - Asynchronous Programming and Futures*
+*Chapter 15 — Asynchronous Programming and Futures*
 

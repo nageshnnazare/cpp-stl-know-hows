@@ -2,7 +2,7 @@
 
 ## Overview
 
-Templates are the foundation of generic programming in C++. They allow you to write code once and use it with any type that meets the requirements.
+Templates are the foundation of generic programming in C++. They allow you to write code once and use it with any type that meets the requirements. C++20 [concepts](07_modern_features.md) and [SFINAE](#sfinae-substitution-failure-is-not-an-error) provide two eras of constraint syntax; deep compile-time computation continues in [Metaprogramming](11_metaprogramming.md).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -79,28 +79,36 @@ Each instantiation is a separate function!
 
 ### Multiple Template Parameters
 ```cpp
+// C++11: trailing return type with decltype is needed because the return
+// type depends on the parameters.
 template<typename T, typename U>
 auto add(T a, U b) -> decltype(a + b) {
     return a + b;
 }
 
-// C++14: Return type deduction
-template<typename T, typename U>
-auto add(T a, U b) {
-    return a + b;
-}
+// C++14 lets you drop the trailing return type (return-type deduction).
+// This is the SAME signature as the version above, so the two cannot
+// coexist in one program — pick one. Shown here only as the C++14 form:
+//
+//   template<typename T, typename U>
+//   auto add(T a, U b) { return a + b; }
 
 int main() {
-    auto result1 = add(5, 3.14);        // int + double = double
-    auto result2 = add(1.5, 2);         // double + int = double
+    auto result1 = add(5, 3.14);        // int + double -> double
+    auto result2 = add(1.5, 2);         // double + int -> double
     
     return 0;
 }
 ```
 
-### Template Specialization
+### Template Specialization (Function Templates)
+
+Function templates support **full** specialization only — there is no partial specialization for function templates. To customize behavior for a family of types (e.g. all pointers), use **overloading** instead.
+
 ```cpp
 #include <cstring>
+#include <iostream>
+#include <type_traits>
 
 // Primary template
 template<typename T>
@@ -114,13 +122,22 @@ bool equal<const char*>(const char* a, const char* b) {
     return std::strcmp(a, b) == 0;
 }
 
+// Overload (preferred over specialization when partial-like behavior is needed)
+template<typename T>
+bool equal(T* a, T* b) {
+    return a == b;  // pointer identity
+}
+
 int main() {
-    bool b1 = equal(5, 5);              // Uses primary template
-    bool b2 = equal("hello", "hello");  // Uses specialized version
-    
+    bool b1 = equal(5, 5);                // Primary template
+    bool b2 = equal("hello", "hello");    // Full specialization
+    int x = 1, y = 1;
+    bool b3 = equal(&x, &y);              // Overload for pointers
     return 0;
 }
 ```
+
+💡 **Hunch**: Class templates allow both full and partial specialization (see below). When you reach for `template<> void foo<int*>(...)`, consider a separate overload or a constrained template with [concepts](#concepts-c20) instead.
 
 ### Overloading vs Specialization
 ```cpp
@@ -273,6 +290,8 @@ int main() {
 ```
 
 ### Class Template Specialization
+
+Class templates support **full** specialization (concrete type list) and **partial** specialization (pattern over template parameters, e.g. `T*`).
 ```cpp
 // Primary template
 template<typename T>
@@ -511,6 +530,9 @@ int main() {
 ```
 
 ### Perfect Forwarding with Variadic Templates
+
+Preserve value category when forwarding arguments into constructors — covered in depth in [Advanced Features](12_advanced_features.md) (forwarding references, reference collapsing). The variadic pattern is the mechanism `std::make_unique`, `std::emplace`, and `std::vector::emplace_back` use internally.
+
 ```cpp
 #include <memory>
 #include <utility>
@@ -536,6 +558,8 @@ int main() {
 ---
 
 ## SFINAE (Substitution Failure Is Not An Error)
+
+SFINAE is the pre-C++20 technique for constraining templates: if substituting template arguments makes an expression ill-formed, that overload is **removed** from the overload set rather than causing a hard error. [Concepts](#concepts-c20) (C++20) express the same intent with clearer syntax and diagnostics — prefer concepts in new code; SFINAE remains common in legacy libraries and `std::enable_if` traits.
 
 ### Basic SFINAE
 ```cpp
@@ -626,50 +650,81 @@ T increment(T value) {
 
 ### What are Concepts?
 
-Concepts provide a way to specify constraints on template parameters, giving clearer errors and better documentation.
+Concepts provide a way to specify constraints on template parameters, giving clearer errors and better documentation. They largely replace SFINAE for new code. See also [Modern C++20/23 Features](07_modern_features.md) for concepts used with ranges.
 
 ```cpp
 #include <concepts>
+#include <iostream>
 
-// Simple concept
+// Define a concept with 'concept' keyword
 template<typename T>
 concept Numeric = std::is_arithmetic_v<T>;
 
-// Using concept
+// Abbreviated template parameter: template<Numeric T> ≡ template<typename T> requires Numeric<T>
 template<Numeric T>
 T add(T a, T b) {
     return a + b;
 }
 
-// Alternative syntax
+// requires clause before function body
 template<typename T>
 requires Numeric<T>
 T multiply(T a, T b) {
     return a * b;
 }
 
-// Trailing requires
+// Trailing requires on return type
 template<typename T>
 T divide(T a, T b) requires Numeric<T> {
     return a / b;
 }
 
+// Standard library constraint — no custom concept needed
+template<std::integral T>
+T double_int(T x) { return x * 2; }
+
+// Constrained abbreviated function template parameter
+void print_integral(std::integral auto value) {
+    std::cout << value << '\n';
+}
+
 int main() {
-    auto sum = add(5, 3);           // OK: int is numeric
-    auto prod = multiply(3.14, 2.0); // OK: double is numeric
-    
-    // auto bad = add("hello", "world");  // ERROR: string not numeric
-    // Clear error message!
-    
+    auto sum = add(5, 3);            // OK
+    auto prod = multiply(3.14, 2.0); // OK
+    print_integral(42);
+    // auto bad = add("hello", "world");  // ERROR: does not satisfy Numeric
     return 0;
 }
+```
+
+### requires Expressions
+
+A `requires` expression checks that types support specific operations — the building block inside `concept` definitions:
+
+```cpp
+#include <concepts>
+#include <iterator>
+
+template<typename T>
+concept HasSize = requires(T t) {
+    { t.size() } -> std::convertible_to<std::size_t>;  // valid expression + return-type constraint
+};
+
+template<typename T>
+concept InputIter = requires(T it) {
+    typename std::iterator_traits<T>::value_type;
+    { *it } -> std::convertible_to<typename std::iterator_traits<T>::value_type>;
+    ++it;
+};
 ```
 
 ### Standard Concepts
 ```cpp
 #include <concepts>
+#include <string>
+#include <vector>
 
-// Some standard concepts:
+// Library concepts from <concepts> and related headers:
 template<typename T>
 void demo() {
     static_assert(std::integral<int>);
@@ -690,12 +745,7 @@ void demo() {
 ### Custom Concepts
 ```cpp
 #include <concepts>
-
-// Concept: Type must have size() method
-template<typename T>
-concept HasSize = requires(T t) {
-    { t.size() } -> std::convertible_to<std::size_t>;
-};
+#include <vector>
 
 // Concept: Type must support addition
 template<typename T>
@@ -750,14 +800,17 @@ SFINAE:
   note: candidate template ignored: substitution failure
   [50 lines of template instantiation backtrace]
 
-Concepts:
-  error: 'add<std::string>' does not satisfy concept 'Numeric'
+Concepts:          error: 'add<std::string>' does not satisfy concept 'Numeric'
   note: std::string is not arithmetic
 ```
+
+For heavier compile-time computation (type lists, `constexpr` algorithms on types), see [Metaprogramming](11_metaprogramming.md).
 
 ---
 
 ## Template Metaprogramming Basics
+
+Introductory compile-time patterns; advanced TMP in [Metaprogramming](11_metaprogramming.md).
 
 ### Compile-Time Computation
 ```cpp
@@ -1386,10 +1439,22 @@ This example showcases the power and flexibility of C++ templates!
 
 ---
 
+## Related Topics
+
+- [Modern C++20/23 Features](07_modern_features.md) — concepts in practice with ranges, views, and `std::span`.
+- [Metaprogramming](11_metaprogramming.md) — advanced TMP: type lists, `constexpr` algorithms, expression templates.
+- [Advanced Features](12_advanced_features.md) — perfect forwarding, `std::forward`, forwarding references, move semantics.
+- [Utility Containers](08_utility_containers.md) — `optional`, `variant`, `tuple`, and `any` as class templates.
+- [Lambdas](10_lambdas.md) — generic lambdas (`auto` parameters) and template-like callables without explicit `template<>`.
+- [Iterators](05_iterators.md) — iterator traits and categories that concepts like `std::input_iterator` formalize.
+- [Best Practices](13_best_practices.md) — managing template bloat, explicit instantiation, and API design.
+
+---
+
 ## Next Steps
 - **Next**: [Lambdas and Functional Programming →](10_lambdas.md)
 - **Previous**: [← Utility Containers](08_utility_containers.md)
 
 ---
-*Part 9 of 22 - Templates*
+*Chapter 9 — Templates*
 

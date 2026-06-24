@@ -2,40 +2,43 @@
 
 ## Overview
 
-The STL algorithms library provides a rich collection of functions for processing sequences of elements. These algorithms work with iterators, making them container-agnostic and highly reusable.
+The STL algorithms library provides a rich collection of functions for processing sequences of elements. These algorithms work with [iterators](05_iterators.md), making them container-agnostic and highly reusable.
+
+💡 **Hunch**: Ranges are always **half-open** `[first, last)` — `last` is one-past-the-end and must not be dereferenced. An empty range has `first == last`.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                STL ALGORITHMS LIBRARY                    │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  NON-MODIFYING      │  MODIFYING        │  SORTING       │
-│  ─────────────      │  ─────────        │  ───────       │
-│  • find             │  • copy           │  • sort        │
-│  • count            │  • fill           │  • partial_sort│
-│  • search           │  • transform      │  • nth_element │
-│  • equal            │  • replace        │  • stable_sort │
-│                     │  • remove         │                │
-│                     │  • reverse        │                │
-│  ─────────────────────────────────────────────────────   │
-│  BINARY SEARCH      │  PARTITIONING     │  NUMERIC       │
-│  ─────────────      │  ────────────     │  ───────       │
-│  • lower_bound      │  • partition      │  • accumulate  │
-│  • upper_bound      │  • stable_partition  • inner_product│
-│  • binary_search    │                   │  • adjacent_diff│
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                STL ALGORITHMS LIBRARY                      │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  NON-MODIFYING      │  MODIFYING        │  SORTING         │
+│  ─────────────      │  ─────────        │  ───────         │
+│  • find             │  • copy           │  • sort          │
+│  • count            │  • fill           │  • partial_sort  │
+│  • search           │  • transform      │  • nth_element   │
+│  • equal            │  • replace        │  • stable_sort   │
+│                     │  • remove         │                  │
+│                     │  • reverse        │                  │
+│  ─────────────────────────────────────────────────────     │
+│  BINARY SEARCH      │  PARTITIONING     │  NUMERIC         │
+│  ─────────────      │  ────────────     │  ───────         │
+│  • lower_bound      │  • partition      │  • accumulate    │
+│  • upper_bound      │  • stable_partition  • inner_product │
+│  • binary_search    │                   │  • adjacent_diff │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ### Algorithm Characteristics
 ```
-1. Work with iterators (container-agnostic)
-2. Don't modify container size (except with inserters)
+1. Work with iterators (container-agnostic) — see 05_iterators.md
+2. Do not change container size (except via insert iterators like back_inserter)
 3. Defined in <algorithm> and <numeric>
-4. Many have _if variants (with predicates)
+4. Many have _if variants (with predicates) — often clearer with [lambdas](10_lambdas.md)
 5. Many have _n variants (specify count)
-6. C++17 added parallel execution policies
-7. C++20 added ranges algorithms
+6. C++17: parallel execution policies (<execution>) — may require linking TBB on libstdc++
+7. C++20: ranges algorithms (std::ranges::) and std::erase / std::erase_if — see 07_modern_features.md
+8. std::sort requires random-access iterators; std::list::sort() is the list alternative
 ```
 
 ---
@@ -75,6 +78,8 @@ int main() {
 ```cpp
 #include <algorithm>
 #include <vector>
+#include <iostream>
+#include <iterator>
 
 int main() {
     std::vector<int> vec = {1, 2, 2, 3, 2, 4, 2, 5};
@@ -123,6 +128,7 @@ int main() {
 ```cpp
 #include <algorithm>
 #include <vector>
+#include <iostream>
 
 int main() {
     std::vector<int> vec = {1, 2, 3, 4, 5};
@@ -175,6 +181,8 @@ int main() {
 ```cpp
 #include <algorithm>
 #include <vector>
+#include <iostream>
+#include <cctype>
 
 int main() {
     std::vector<int> v1 = {1, 2, 3, 4, 5};
@@ -368,8 +376,11 @@ int main() {
     vec.erase(new_end, vec.end());
     // vec = {1, 3, 4, 5}
     
-    // Erase-remove idiom (one line)
-    vec = {1, 2, 3, 2, 4, 2, 5};
+    // C++20: std::erase / std::erase_if — no erase-remove idiom needed
+    // std::erase(vec, 2);
+    // std::erase_if(vec, [](int x) { return x % 2 == 0; });
+
+    // Pre-C++20 erase-remove idiom (still valid everywhere):
     vec.erase(std::remove(vec.begin(), vec.end(), 2), vec.end());
     
     // Remove with predicate
@@ -522,9 +533,13 @@ int main() {
 ## Sorting Operations
 
 ### std::sort
+
+Requires **random-access iterators** (`vector`, `deque`, `array`, C-style arrays). Cannot sort a `std::list` with `std::sort` — use `list.sort()` instead ([Sequence Containers](01_sequence_containers.md)).
+
 ```cpp
 #include <algorithm>
 #include <vector>
+#include <functional>  // std::greater
 
 int main() {
     std::vector<int> vec = {5, 2, 8, 1, 9, 3};
@@ -547,18 +562,21 @@ int main() {
 
 ### Sorting Algorithms Comparison
 ```
-┌──────────────────────────────────────────────────────────┐
-│          SORTING ALGORITHM COMPARISON                    │
-├──────────────────────────────────────────────────────────┤
-│ Algorithm      │ Time        │ Space │ Stable │ Notes    │
-├────────────────┼─────────────┼───────┼────────┼───────── ┤
-│ sort           │ O(n log n)  │ O(1)  │ No     │ Fastest  │
-│ stable_sort    │ O(n log n)  │ O(n)  │ Yes    │ Slower   │
-│ partial_sort   │ O(n log k)  │ O(1)  │ No     │ Top K    │
-│ nth_element    │ O(n) avg    │ O(1)  │ No     │ Median   │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│             SORTING ALGORITHM COMPARISON                        │
+├─────────────────────────────────────────────────────────────────┤
+│ Algorithm      │ Time        │ Space    │ Stable │ Notes        │
+├────────────────┼─────────────┼──────────┼────────┼──────────────┤
+│ sort           │ O(n log n)  │ O(log n) │ No     │ Fastest      │
+│ stable_sort    │ O(n log n)  │ O(n)*    │ Yes    │ Stable       │
+│ partial_sort   │ O(n log k)  │ O(1)     │ No     │ Top K        │
+│ nth_element    │ O(n) avg    │ O(1)     │ No     │ Median       │
+└─────────────────────────────────────────────────────────────────┘
 
-Stable: Preserves relative order of equal elements
+sort uses O(log n) stack space (introsort recursion), not O(1).
+* stable_sort uses O(n) extra memory; if none is available it falls
+  back to an in-place merge that is O(n log^2 n) time instead.
+Stable: preserves the relative order of equal elements.
 ```
 
 ### std::stable_sort
@@ -1086,14 +1104,16 @@ int main() {
 
 ## Execution Policies (C++17)
 
-### Parallel Algorithms
+Parallel algorithms take an execution policy as the first argument. Include `<execution>` and link the parallel backend your standard library uses (GCC libstdc++ often needs `-ltbb` for `std::execution::par`).
+
 ```cpp
 #include <algorithm>
 #include <execution>
+#include <numeric>
 #include <vector>
 
 int main() {
-    std::vector<int> vec(1000000);
+    std::vector<int> vec(1'000'000);
     std::iota(vec.begin(), vec.end(), 0);
     
     // Sequential execution (default)
@@ -1120,25 +1140,60 @@ int main() {
 │ std::execution::seq         │    No    │     No      │
 │ std::execution::par         │    Yes   │     No      │
 │ std::execution::par_unseq   │    Yes   │     Yes     │
-│ std::execution::unseq       │    No    │     Yes     │
+│ std::execution::unseq (C++20)    No    │     Yes     │
 └──────────────────────────────────────────────────────┘
 
-Use for: Large datasets, CPU-intensive operations
-Requirement: Operations must be thread-safe!
+Note: seq, par, and par_unseq are C++17; unseq was added in C++20.
+
+Use for: large datasets, CPU-intensive operations
+Requirements:
+- Operations and predicates must be thread-safe (no shared mutable state)
+- On libstdc++, link Intel TBB: g++ ... -ltbb
+- Not all algorithms have parallel overloads — check [cppreference](https://en.cppreference.com/w/cpp/algorithm)
 ```
+
+---
+
+## Ranges Algorithms (C++20)
+
+C++20 adds `std::ranges::` versions that accept ranges directly, support **projections**, and compose with lazy **views**. See [Modern C++20/23 Features](07_modern_features.md) for views in depth.
+
+```cpp
+#include <algorithm>
+#include <ranges>
+#include <vector>
+#include <string>
+
+struct Person { std::string name; int age; };
+
+int main() {
+    std::vector<Person> people = {
+        {"Alice", 30}, {"Bob", 25}, {"Charlie", 35}
+    };
+
+    // Sort by age via projection (no manual comparator boilerplate)
+    std::ranges::sort(people, {}, &Person::age);
+
+    // Lazy view: filter then transform (nothing runs until you iterate)
+    auto names_of_adults = people
+        | std::views::filter([](const Person& p) { return p.age >= 30; })
+        | std::views::transform(&Person::name);
+
+    for (const auto& name : names_of_adults) { /* ... */ }
+
+    return 0;
+}
+```
+
+Views are **lazy** — they store iterators/adaptors and evaluate on demand. Algorithms like `std::ranges::sort` materialize in-place on owning containers.
 
 ---
 
 ## Common Patterns and Best Practices
 
 ### Pattern 1: Erase-Remove Idiom
-```cpp
-// Remove all elements equal to value
-vec.erase(std::remove(vec.begin(), vec.end(), value), vec.end());
 
-// Remove elements matching predicate
-vec.erase(std::remove_if(vec.begin(), vec.end(), predicate), vec.end());
-```
+See the detailed walkthrough in [std::remove](#stdremove-stdremove_if) above. C++20 shortcut: `std::erase(vec, value)` / `std::erase_if(vec, pred)`.
 
 ### Pattern 2: Sort and Unique (Remove Duplicates)
 ```cpp
@@ -1520,18 +1575,28 @@ This example shows the power of composing STL algorithms!
 
 ## Performance Tips
 
-1. **Reserve space**: When using `back_inserter`, reserve space first
-2. **Use appropriate algorithm**: `nth_element` is faster than full `sort` for finding median
-3. **Parallel execution**: Use execution policies for large datasets
-4. **Avoid unnecessary copies**: Use move semantics and in-place operations
-5. **Choose right container**: Random access iterators enable more efficient algorithms
+1. **Reserve space**: When using `back_inserter`, call `vec.reserve(n)` first to avoid repeated reallocations
+2. **Use appropriate algorithm**: `nth_element` is O(n) average vs O(n log n) for full `sort` when you only need one order statistic
+3. **Parallel execution**: Use `std::execution::par` for large datasets; link TBB on libstdc++ (`-ltbb`)
+4. **Avoid unnecessary copies**: Use `std::move` algorithm and in-place transforms; see [Move Semantics](12_advanced_features.md)
+5. **Choose right container**: Random-access iterators unlock `sort`; for `std::list`, call `list.sort()` instead
+6. **Prefer associative containers** for sorted unique keys instead of `sort` + `unique` when inserts dominate ([Associative Containers](02_associative_containers.md))
 
 ---
+
+## Related Topics
+
+- [Iterators](05_iterators.md) — half-open ranges, categories, and why `std::sort` needs random access
+- [Modern C++20/23 Features](07_modern_features.md) — `std::ranges`, views, projections, and concepts
+- [Sequence Containers](01_sequence_containers.md) — `list::sort`, vector `reserve` before `back_inserter`
+- [Lambdas](10_lambdas.md) — predicates and comparators for `_if` algorithms
+- [Associative Containers](02_associative_containers.md) — `set`/`map` for sorted data without calling `sort`
+- [Multithreading](14_multithreading.md) — thread safety when using `std::execution::par`
 
 ## Next Steps
 - **Next**: [Modern C++20/23 Features →](07_modern_features.md)
 - **Previous**: [← Iterators](05_iterators.md)
 
 ---
-*Part 6 of 22 - Algorithms*
+*Chapter 6 — Algorithms*
 

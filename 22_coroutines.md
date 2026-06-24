@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++20 introduced coroutines as a powerful feature for writing asynchronous and generator-style code. Coroutines are functions that can suspend and resume execution, enabling elegant solutions for async operations, lazy evaluation, and cooperative multitasking.
+C++20 introduced coroutines — functions that can suspend and resume via `co_await`, `co_yield`, or `co_return`. **The standard library ships almost no ready-made coroutine types in C++20** (`std::generator` is [C++23](https://en.cppreference.com/w/cpp/coroutine/generator)); you typically hand-roll a `promise_type` for generators and async tasks. Coroutines enable lazy sequences, async workflows, and state machines with far less boilerplate than callbacks. See [Async & Futures](15_async_futures.md) for thread-based alternatives.
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -30,29 +30,29 @@ C++20 introduced coroutines as a powerful feature for writing asynchronous and g
 ## Coroutine Basics
 
 ### What Makes a Coroutine?
-```cpp
-// A function is a coroutine if it uses any of:
-// 1. co_await
-// 2. co_yield
-// 3. co_return
 
+A function becomes a coroutine if it uses `co_await`, `co_yield`, or `co_return`. The compiler generates a **coroutine frame** (often heap-allocated; elidable via HALO) and a **`promise_type`** nested in the return type that controls suspend/resume behavior.
+
+```cpp
 #include <coroutine>
 
-// Example 1: Using co_return
+// Task and Generator below are hand-rolled — not in C++20 std
+struct Task;       // forward declare; defined later in this chapter
+template<typename T> struct Generator;
+struct SomeAwaitable;
+
 Task simple_coroutine() {
-    co_return;  // This makes it a coroutine
+    co_return;
 }
 
-// Example 2: Using co_yield
 Generator<int> count_to_three() {
     co_yield 1;
     co_yield 2;
     co_yield 3;
 }
 
-// Example 3: Using co_await
 Task async_operation() {
-    auto result = co_await some_async_task();
+    auto result = co_await SomeAwaitable{};
     co_return result;
 }
 ```
@@ -66,7 +66,7 @@ Normal Function:
 
 Coroutine:
 ┌─────────────────────────────────────────────────────┐
-│ Start → Execute → Suspend ─┐                        │
+│ Start → Execute → Suspend  ─┐                       │
 │           ↑                 │                       │
 │           └─── Resume ←─────┘                       │
 │                 Execute → Suspend ─┐                │
@@ -82,15 +82,19 @@ Key: Can pause and resume multiple times
 
 ## Generator Pattern
 
+C++23 provides `std::generator<T>` when `__cpp_lib_generator` is available; until then, implement the pattern below (or use [cppcoro](https://github.com/lewissbaker/cppcoro)).
+
 ### Simple Generator
 ```cpp
 #include <coroutine>
-#include <iostream>
 #include <exception>
+#include <iostream>
+#include <utility>
 
 // Generator return type
 template<typename T>
 struct Generator {
+    using value_type = T;   // lets generic code (e.g. filter()) name the element type
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
     
@@ -211,10 +215,13 @@ void example() {
 
 ## Async Task Pattern
 
+`Task<T>` is also hand-rolled. Libraries like cppcoro, Boost.Asio (`awaitable`), and folly provide production-ready task types with schedulers and I/O integration.
+
 ### Task Implementation
 ```cpp
 #include <coroutine>
 #include <exception>
+#include <utility>
 #include <variant>
 
 template<typename T>
@@ -328,9 +335,13 @@ void example() {
 
 ## Awaitable Objects
 
+`co_await expr` transforms `expr` via `operator co_await` (if present), then calls `await_ready()`, `await_suspend(handle)`, and `await_resume()` on the awaitable. Returning `true` from `await_ready()` skips suspend.
+
 ### Custom Awaitable
 ```cpp
 #include <chrono>
+#include <coroutine>
+#include <iostream>
 #include <thread>
 
 struct sleep_awaitable {
@@ -640,16 +651,13 @@ void example() {
 ```
 
 ### Pipeline Pattern
-```cpp
-auto pipeline = 
-    range(1, 100)
-    | filter([](int x) { return x % 2 == 0; })
-    | map([](int x) { return x * x; })
-    | take(10);
 
-for (int value : pipeline) {
-    std::cout << value << ' ';
-}
+Composable lazy pipelines pair naturally with [range algorithms](06_algorithms.md) when materialized; coroutine pipelines suspend between stages.
+
+```cpp
+// Conceptual — requires take/filter/map helpers defined above
+auto numbers = range(1, 100);
+auto evens = filter(std::move(numbers), [](int x) { return x % 2 == 0; });
 ```
 
 ### Async Retry Logic
@@ -675,40 +683,17 @@ Task<Response> retry_async(int max_attempts) {
 
 ## Performance Considerations
 
-### Memory Overhead
+### Memory: Frame Allocation and HALO
+
+The compiler typically allocates the coroutine frame on the heap. **HALO** (Heap Allocation eLision Optimization) can merge the frame into the caller's stack when the coroutine's lifetime is provably nested — but do not rely on it for correctness.
+
 ```
-Traditional Callback:
-┌────────────────────────┐
-│ Heap allocations for   │
-│ callback objects       │  ~50-100 bytes per callback
-└────────────────────────┘
-
-Thread per Task:
-┌────────────────────────┐
-│ Thread stack           │  ~1-8 MB per thread
-│ OS scheduler overhead  │
-└────────────────────────┘
-
-Coroutine:
-┌────────────────────────┐
-│ Coroutine frame        │  ~100-500 bytes
-│ Promise object         │  Minimal overhead
-└────────────────────────┘
-
-Coroutines: Much more memory efficient than threads
+Coroutine frame:     ~100–500 bytes (locals + suspend state)
+Thread stack:        ~1–8 MB each
+Callback + bind:     ~50–100 bytes per closure
 ```
 
-### Allocation Elision
-```cpp
-// Compiler may optimize away heap allocation
-Task<int> small_coroutine() {
-    co_return 42;
-}
-
-// HALO (Heap Allocation eLision Optimization)
-// If coroutine lifetime is obvious, compiler can
-// allocate on stack instead of heap
-```
+Coroutines give **concurrency** (many tasks interleaved), not **parallelism** — CPU-bound work still belongs on threads ([Multithreading](14_multithreading.md)).
 
 ---
 
@@ -794,22 +779,26 @@ Task<void> good() {
 }
 ```
 
-### 2. Dangling References
+### 2. Dangling References and Frame Lifetime
+
+Coroutine parameters and captured references may outlive their referents when the coroutine suspends and the caller returns.
+
 ```cpp
-// BAD
-Generator<int> bad_generator() {
-    std::vector<int> vec = {1, 2, 3};
-    for (int value : vec) {
-        co_yield value;  // vec destroyed after first suspend!
-    }
+// BAD: reference parameter may dangle after caller returns
+Task<void> dangerous(int& value) {
+    co_await std::suspend_always{};
+    value = 42;
 }
 
-// GOOD: Ensure data lifetime
-Generator<int> good_generator() {
+// BAD: returning reference to local in generator
+Generator<const int&> bad_refs() {
     std::vector<int> vec = {1, 2, 3};
-    for (int i = 0; i < vec.size(); ++i) {
-        co_yield vec[i];  // Copy value before yielding
-    }
+    for (int& x : vec) co_yield x;  // references invalid after destruction
+}
+
+// GOOD: yield by value; pass shared_ptr or move ownership
+Generator<int> good_values() {
+    for (int i = 0; i < 3; ++i) co_yield i;
 }
 ```
 
@@ -831,23 +820,19 @@ Task<void> example() {
 
 ## Compiler Support
 
-### Current Status (2024)
+### Current Status (2025)
 ```
 ┌────────────────────────────────────────────────────────┐
 │              Coroutine Support Status                  │
 ├────────────────────────────────────────────────────────┤
-│ Compiler      │ Version  │ Support                     │
+│ Compiler      │ Version  │ Notes                       │
 ├───────────────┼──────────┼─────────────────────────────┤
-│ GCC           │ 10+      │ Full support                │
-│ Clang         │ 14+      │ Full support                │
-│ MSVC          │ 19.28+   │ Full support                │
+│ GCC           │ 10+      │ Language support complete   │
+│ Clang         │ 14+      │ Apple Clang may lag std gen │
+│ MSVC          │ 19.28+   │ Full coroutine support      │
 │                                                        │
-│ Note: Requires -std=c++20 or later                     │
-│                                                        │
-│ Libraries:                                             │
-│ • cppcoro: Popular coroutine utilities library         │
-│ • folly: Facebook's coroutine support                  │
-│ • boost.asio: Coroutine integration                    │
+│ std::generator: C++23 — check __cpp_lib_generator      │
+│ Libraries: cppcoro, Boost.Asio, folly                  │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -900,11 +885,17 @@ boost::asio::awaitable<void> echo(tcp::socket socket) {
 
 ## Future Directions
 
-### C++23 and Beyond
-- std::generator (standardized generator type)
-- Improved coroutine support in standard library
-- Better debugging support
-- Performance improvements
+### C++23 `std::generator`
+```cpp
+#include <generator>  // C++23, __cpp_lib_generator
+
+std::generator<int> iota(int n) {
+    for (int i = 0; i < n; ++i)
+        co_yield i;
+}
+```
+
+Apple Clang/libc++ may not ship `std::generator` yet — keep a hand-rolled fallback or use cppcoro.
 
 ---
 
@@ -1265,29 +1256,29 @@ int main() {
 ```
 
 ### Concepts Demonstrated:
-- **Generator pattern**: Lazy data generation
-- **co_yield**: Suspending and returning values
-- **Lazy evaluation**: Computing only when needed
-- **Pipeline composition**: Chaining generators
-- **Filter/Map**: Functional programming patterns
-- **Batching**: Accumulating items
-- **Infinite sequences**: Never-ending generators
-- **State preservation**: Coroutine state across suspensions
-- **Resource efficiency**: Processing one item at a time
-- **Async simulation**: Asynchronous-style processing
-- **Fibonacci**: Classic recursive generator
-- **Take**: Limiting infinite sequences
-
-This example shows how coroutines enable elegant data processing pipelines!
+- **Hand-rolled Generator / Task**: `promise_type` + `coroutine_handle`
+- **co_yield / co_await / co_return**: Suspend points
+- **Lazy pipelines**: Filter, transform, batch without eager materialization
+- **Frame lifetime**: Locals live in the coroutine frame across suspensions
 
 ---
+
+## Related Topics
+
+- [Async & Futures](15_async_futures.md) — thread-based async before coroutines
+- [Multithreading](14_multithreading.md) — parallelism vs coroutine concurrency
+- [Lambdas](10_lambdas.md) — callbacks coroutines replace; capture lifetime parallels
+- [Templates](09_templates.md) — generic `Generator<T>` and `Task<T>`
+- [Time and Chrono](18_time_chrono.md) — `sleep_awaitable` timing patterns
+- [Exceptions](17_exceptions.md) — `unhandled_exception` in promise types
+- [Quick Reference](99_quick_reference.md) — coroutine keyword summary
 
 ## Next Steps
 - **Previous**: [← Modules](21_modules.md)
 - **Back to**: [Table of Contents](README.md)
 
 ---
-*Part 22 of 22 - Coroutines (C++20)*
+*Chapter 22 — Coroutines (C++20)*
 
 ## Summary
 

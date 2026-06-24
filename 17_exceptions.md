@@ -2,7 +2,7 @@
 
 ## Overview
 
-Exception handling is C++'s primary mechanism for dealing with runtime errors. This chapter covers exception mechanics, safety guarantees, modern error handling techniques, and the upcoming std::expected (C++23).
+Exception handling is C++'s primary mechanism for dealing with runtime errors. This chapter covers exception mechanics, safety guarantees, modern error handling with `std::error_code`, and `std::expected` (C++23). RAII — covered in depth in [Advanced Features](12_advanced_features.md) — is the foundation of exception-safe resource management.
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -250,12 +250,12 @@ int main() {
 │          Exception Safety Guarantees                   │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
-│ 1. NO-THROW GUARANTEE (noexcept)                      │
+│ 1. NO-THROW GUARANTEE (noexcept)                       │
 │    • Never throws exceptions                           │
 │    • Required for: destructors, move operations, swap  │
-│    • Example: int* ptr = nullptr;                      │
+│    • Throwing from a noexcept function → std::terminate│
 │                                                        │
-│ 2. STRONG GUARANTEE (commit-or-rollback)              │
+│ 2. STRONG GUARANTEE (commit-or-rollback)               │
 │    • Either completes successfully OR                  │
 │    • Leaves state unchanged (as if not called)         │
 │    • Example: vector::push_back (if realloc fails)     │
@@ -272,6 +272,8 @@ int main() {
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
+
+💡 **Hunch**: Containers use `noexcept` move operations to choose move-over-copy during reallocation (strong guarantee). Mark moves `noexcept` when possible — see [Advanced Features](12_advanced_features.md).
 
 ### No-Throw Guarantee (noexcept)
 ```cpp
@@ -401,7 +403,7 @@ void check_noexcept() {
     constexpr bool is_noexcept = noexcept(std::declval<int>() + 1);
 }
 
-// Destructors are implicitly noexcept
+// Destructors are implicitly noexcept — throwing calls std::terminate
 class MyClass {
 public:
     ~MyClass() {  // implicitly noexcept
@@ -409,11 +411,11 @@ public:
     }
 };
 
-// Override if really needed (dangerous!)
+// Override only if you truly must (almost never)
 class DangerousClass {
 public:
     ~DangerousClass() noexcept(false) {
-        // Can throw, but usually bad idea
+        // If this throws during stack unwinding → std::terminate
     }
 };
 ```
@@ -447,6 +449,8 @@ void performance_example() {
 ---
 
 ## Error Codes (Alternative to Exceptions)
+
+`std::error_code` is a lightweight, non-throwing error carrier. Ideal for performance-critical paths, C interop, and filesystem/I/O APIs that offer `error_code` overloads — see [I/O and Filesystem](16_io_filesystem.md).
 
 ### std::error_code
 ```cpp
@@ -555,6 +559,8 @@ int main() {
 
 ## std::expected (C++23)
 
+A value-or-error type for regular, expected failures — composable like `std::optional` but with a typed error channel. Check `__cpp_lib_expected` before use; Apple Clang/libc++ added it in recent Xcode releases.
+
 ### Result Type Pattern
 ```cpp
 #include <expected>  // C++23
@@ -598,13 +604,13 @@ int main() {
 ┌────────────────────────────────────────────────────────┐
 │     Error Handling Comparison                          │
 ├────────────────────────────────────────────────────────┤
-│              │ Exceptions │ Error Codes │ expected    │
-├──────────────┼────────────┼─────────────┼─────────────┤
-│ Ergonomics   │ Good       │ Poor        │ Good        │
-│ Performance  │ Slow path  │ Fast        │ Fast        │
-│ Composability│ Good       │ Poor        │ Excellent   │
-│ Type safety  │ Partial    │ Weak        │ Strong      │
-│ Zero overhead│ No         │ Yes         │ Almost      │
+│              │ Exceptions │ Error Codes │ expected     │
+├──────────────┼────────────┼─────────────┼──────────────┤
+│ Ergonomics   │ Good       │ Poor        │ Good         │
+│ Performance  │ Slow path  │ Fast        │ Fast         │
+│ Composability│ Good       │ Poor        │ Excellent    │ 
+│ Type safety  │ Partial    │ Weak        │ Strong       │
+│ Zero overhead│ No         │ Yes         │ Almost       │
 │                                                        │
 │ Use exceptions for: Rare, exceptional conditions       │
 │ Use error codes for: C interop, performance critical   │
@@ -677,15 +683,15 @@ public:
 class Bad {
 public:
     ~Bad() {
-        throw std::runtime_error("Bad!");  // NEVER DO THIS!
+        throw std::runtime_error("Bad!");  // NEVER — calls std::terminate during unwinding
     }
 };
 
 class Good {
 public:
-    ~Good() noexcept {  // Explicitly noexcept
+    ~Good() noexcept {
         try {
-            cleanup();  // If this might throw
+            cleanup();
         } catch (...) {
             // Log error, but don't let it escape
         }
@@ -745,11 +751,10 @@ double divide(double a, double b);
 ### 5. Use RAII for All Resources
 ```cpp
 // Every resource should have an owning RAII wrapper
-std::unique_ptr<T>     // for pointers
-std::lock_guard        // for mutexes
-std::fstream           // for files
+std::unique_ptr<T>     // for pointers — see [Advanced Features](12_advanced_features.md)
+std::lock_guard        // for mutexes — see [Multithreading](14_multithreading.md)
+std::fstream           // for files — see [I/O and Filesystem](16_io_filesystem.md)
 std::vector            // for arrays
-// etc.
 ```
 
 ---
@@ -1313,10 +1318,20 @@ This example shows robust, production-ready exception handling!
 
 ---
 
+## Related Topics
+
+- [Advanced Features](12_advanced_features.md) — RAII, smart pointers, move semantics, and the Rule of Five that underpin exception safety
+- [Multithreading](14_multithreading.md) — `std::lock_guard` and why locks must survive stack unwinding
+- [I/O and Filesystem](16_io_filesystem.md) — `std::filesystem::filesystem_error` and non-throwing `error_code` overloads
+- [Async and Futures](15_async_futures.md) — exception propagation through `std::future::get()`; `std::future_error`
+- [Best Practices](13_best_practices.md) — when to throw vs return errors; API design guidance
+- [Modern C++20/23 Features](07_modern_features.md) — `std::expected` and other C++23 error-handling additions
+- [Quick Reference](99_quick_reference.md) — exception hierarchy and safety guarantees at a glance
+
 ## Next Steps
 - **Next**: [Time and Chrono →](18_time_chrono.md)
 - **Previous**: [← I/O and Filesystem](16_io_filesystem.md)
 
 ---
-*Part 17 of 22 - Exception Handling and Error Management*
+*Chapter 17 — Exception Handling and Error Management*
 

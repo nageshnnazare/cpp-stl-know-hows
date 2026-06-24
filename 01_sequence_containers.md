@@ -100,11 +100,11 @@ int main() {
     vec.resize(10);             // Resize to 10 elements
     vec.resize(15, 42);         // Resize to 15, new elements = 42
     
-    // Insertion
-    auto it = vec.begin();
-    vec.insert(it, 99);                  // Insert 99 at beginning
-    vec.insert(it + 2, 3, 88);          // Insert 3×88 at position 2
-    vec.insert(it, {7, 8, 9});          // Insert multiple elements
+    // Insertion — NOTE: each insert may reallocate and ALWAYS invalidates
+    // iterators at/after the insertion point, so re-fetch begin() each time.
+    vec.insert(vec.begin(), 99);             // Insert 99 at beginning
+    vec.insert(vec.begin() + 2, 3, 88);      // Insert 3×88 at position 2
+    vec.insert(vec.begin(), {7, 8, 9});      // Insert multiple elements
     
     // Deletion
     vec.pop_back();                     // Remove last element
@@ -117,26 +117,48 @@ int main() {
 ```
 
 ### Vector Growth Strategy
+
+When `push_back` exceeds the current capacity, the vector allocates a larger
+block, **moves/copies** the existing elements into it, and frees the old block.
+The exact sequence of capacities is *implementation-defined*. With the common
+**2x growth factor** (libstdc++/GCC and libc++/Clang), the capacities grow
+`1, 2, 4, 8, 16, ...`:
+
 ```
 Initial: capacity=0, size=0
          []
 
-push_back(1):
-         [1][?][?][?]
-         capacity=4, size=1
+push_back(1):  REALLOCATION (0 -> 1)
+         [1]
+         capacity=1, size=1
 
-push_back(2), push_back(3), push_back(4):
+push_back(2):  REALLOCATION (1 -> 2)
+         [1][2]
+         capacity=2, size=2
+
+push_back(3):  REALLOCATION (2 -> 4)
+         [1][2][3][?]
+         capacity=4, size=3
+
+push_back(4):  (fits)
          [1][2][3][4]
          capacity=4, size=4
 
-push_back(5): REALLOCATION!
-Old:     [1][2][3][4]
-         
-New:     [1][2][3][4][5][?][?][?]
+push_back(5):  REALLOCATION (4 -> 8)
+         [1][2][3][4][5][?][?][?]
          capacity=8, size=5
-         
-Growth factor: typically 1.5x or 2x
 ```
+
+**Growth factor by implementation:**
+- libstdc++ (GCC) and libc++ (Clang): **2x**
+- MSVC: **1.5x** (capacities grow `1, 2, 3, 4, 6, 9, ...`)
+
+A factor below 2 lets freed blocks be reused by later allocations, which can
+reduce memory fragmentation — that is the rationale behind MSVC's 1.5x.
+
+> **Tip:** If you know the final size, call `reserve(n)` *once* up front. This
+> turns N reallocations into a single allocation and prevents the iterator/
+> pointer invalidation discussed under [Common Pitfalls](#common-pitfalls).
 
 ### Performance Analysis
 ```
@@ -162,18 +184,26 @@ find()             | O(n)      | Linear search
 ### C++20/23 Features
 ```cpp
 #include <vector>
+#include <ranges>   // std::views::iota, std::from_range (C++20/23)
 
-// C++20: contains() for checking existence (no direct method, use std::find)
-// C++23: range constructor
-std::vector<int> v1(std::from_range, some_range);
-
-// C++20: erase/erase_if
+// C++20: uniform container erasure (free functions, not members).
+// These fix the classic "erase-remove" idiom footgun (see Common Pitfalls).
 std::vector<int> v = {1, 2, 3, 4, 5, 6};
-std::erase(v, 3);              // Remove all 3s
-std::erase_if(v, [](int x) {   // Remove all even numbers
+std::erase(v, 3);               // Remove all elements equal to 3
+std::erase_if(v, [](int x) {    // Remove all even numbers
     return x % 2 == 0;
 });
+
+// C++23: construct directly from any range with the std::from_range_t tag
+auto some_range = std::views::iota(0, 5);          // 0,1,2,3,4 (see Modern Features)
+std::vector<int> v1(std::from_range, some_range);
 ```
+
+> `std::vector` has no `contains()` member — use
+> [`std::ranges::find`](06_algorithms.md) / `std::find` and compare against
+> `end()`, or pick an [associative](02_associative_containers.md) /
+> [unordered](03_unordered_containers.md) container if membership testing is a
+> hot path.
 
 ---
 
@@ -359,7 +389,9 @@ Before splice:
 list1: [1]→[2]→[3]→[4]
 list2: [A]→[B]→[C]
 
-list1.splice(list1.begin() + 2, list2);
+// std::list iterators are bidirectional, so advance with std::next
+// (there is no operator+ for them):
+list1.splice(std::next(list1.begin(), 2), list2);
 
 After splice:
 list1: [1]→[2]→[A]→[B]→[C]→[3]→[4]
@@ -685,11 +717,11 @@ Given these scenarios, choose the best container:
 5. LRU cache implementation
 
 **Answers:**
-1. `std::array<double, 3>` - fixed size
-2. `std::deque<Page>` - double-ended operations
-3. `std::list<State>` - frequent insertions/deletions
-4. `std::vector<int>` - good for sorting
-5. `std::list<pair<key, value>>` - frequent moves to front
+1. `std::array<double, 3>` — fixed size, no heap allocation.
+2. `std::deque<Page>` or two `std::stack`s — you push/pop at both ends (or use back/forward stacks). A `std::vector` works too if you only grow one side.
+3. `std::vector<State>` with an index, or `std::list<State>` — undo/redo is mostly push/pop at one end, so a `vector` is usually the cache-friendlier choice; reach for `list` only if you must splice from the middle.
+4. `std::vector<int>` — contiguous storage sorts fastest (see [Algorithms](06_algorithms.md)).
+5. **LRU cache** needs *two* structures working together: a `std::list<std::pair<Key,Value>>` for recency order (move-to-front in O(1) via `splice`) **plus** a `std::unordered_map<Key, list::iterator>` for O(1) lookup. A list alone gives O(n) lookups. See [Unordered Containers](03_unordered_containers.md).
 
 ---
 
@@ -707,9 +739,15 @@ v.push_back(4);  // May reallocate!
 ```cpp
 std::deque<int> dq = {1, 2, 3};
 auto it = dq.begin();
-dq.push_front(0);  // Invalidates iterators (but not references!)
+dq.push_front(0);  // Invalidates ALL iterators...
 // it is now INVALID
+// ...but inserting at *either end* keeps references and pointers to
+// existing elements valid (only middle insertion invalidates those).
 ```
+
+> Iterator-invalidation rules differ per container and per operation. The
+> [Iterators](05_iterators.md) chapter has the full table; when in doubt,
+> re-fetch the iterator after any modifying call.
 
 ### 3. List Inefficient Access
 ```cpp
@@ -902,8 +940,9 @@ int main() {
     tm.add_task("Review pull request", 1);
     tm.add_task("Update dependencies", 1);
     
-    // Add urgent task (demonstrates deque::push_front)
-    tm.add_urgent_task("Critical security patch!", 4);
+    // Add urgent task (demonstrates deque::push_front).
+    // add_urgent_task() takes only a description; it sets priority 4 internally.
+    tm.add_urgent_task("Critical security patch!");
     
     tm.show_queue();
     tm.show_statistics();
@@ -993,10 +1032,19 @@ This example shows why you'd choose different containers for different use cases
 
 ---
 
+## Related Topics
+- [Iterators](05_iterators.md) — how to traverse these containers and the invalidation rules.
+- [Algorithms](06_algorithms.md) — `sort`, `find`, `erase`-`remove`, and friends that operate on sequences.
+- [Container Adaptors](04_container_adaptors.md) — `stack`/`queue`/`priority_queue` are built on top of `deque`/`vector`.
+- [Modern Features](07_modern_features.md) — `std::span` gives a non-owning view over contiguous sequences; ranges/views compose lazily.
+- [Memory Management & Allocators](19_memory_allocators.md) — customize how these containers allocate.
+- [Advanced Features](12_advanced_features.md) — move semantics explain why `emplace_back` and reallocation behave the way they do.
+- [Quick Reference](99_quick_reference.md) — complexity table and the container decision tree at a glance.
+
 ## Next Steps
 - **Next**: [Associative Containers →](02_associative_containers.md)
 - **Previous**: [← Main README](README.md)
 
 ---
-*Part 1 of 22 - Sequence Containers*
+*Chapter 1 — Sequence Containers*
 

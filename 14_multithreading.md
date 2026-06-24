@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++11 introduced a standardized threading library, making concurrent programming portable across platforms. This chapter covers threads, synchronization, and thread safety.
+C++11 introduced a standardized threading library, making concurrent programming portable across platforms. This chapter covers threads, synchronization, and thread safety. For higher-level async abstractions built on these primitives, see [Async and Futures](15_async_futures.md); for RAII patterns that make locks and resources exception-safe, see [Advanced Features](12_advanced_features.md) and [Exception Handling](17_exceptions.md).
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -54,7 +54,7 @@ int main() {
         std::cout << "Hello from lambda!\n";
     });
     
-    // Must join or detach before thread object is destroyed
+    // Must join or detach before destruction — otherwise std::terminate()
     t1.join();  // Wait for thread to finish
     t2.join();
     t3.join();
@@ -74,6 +74,8 @@ int main() {
 │     │           └─► join() ──► Thread destroyed        │
 │     │                                                  │
 │     └─► detach() ──► Thread runs independently         │
+│                                                        │
+│  ⚠️ Destroying a joinable std::thread → std::terminate │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
@@ -112,6 +114,7 @@ int main() {
 ### Thread with Member Functions
 ```cpp
 #include <thread>
+#include <iostream>
 
 class Worker {
 public:
@@ -243,7 +246,7 @@ std::thread:
 │ Create thread                        │
 │ Do work                              │
 │ Must explicitly join or detach       │ ← Can forget!
-│ Destructor terminates if not joined │ ← Danger!
+│ Destructor terminates if not joined  │ ← Danger!
 └──────────────────────────────────────┘
 
 std::jthread:
@@ -255,9 +258,15 @@ std::jthread:
 └──────────────────────────────────────┘
 ```
 
+💡 **Hunch**: Check `__cpp_lib_jthread` (C++20) before relying on `std::jthread`. Apple Clang/libc++ added it in recent Xcode releases; older toolchains need `std::thread` + explicit `join()`.
+
 ---
 
 ## Mutexes and Locks
+
+`std::mutex` is **not recursive** — locking it twice from the same thread is undefined behavior. Use `std::recursive_mutex` only when re-entrant locking is genuinely required (e.g., callbacks that re-enter the same object); prefer redesigning the lock scope instead.
+
+Always prefer RAII lock wrappers over manual `lock()`/`unlock()` — see [Advanced Features](12_advanced_features.md) and [Exception Handling](17_exceptions.md) for why RAII matters when exceptions unwind the stack.
 
 ### std::mutex
 ```cpp
@@ -378,8 +387,9 @@ void try_locking() {
 │ Overhead     │ Minimal    │ Small       │ Minimal      │
 │                                                        │
 │ Use lock_guard when: Simple RAII locking               │
-│ Use unique_lock when: Need flexibility                 │
+│ Use unique_lock when: Need flexibility / condition_var │
 │ Use scoped_lock when: Locking multiple mutexes         │
+│ Use shared_lock when: Reader with shared_mutex (C++17) │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -535,7 +545,7 @@ Writer ──► Only one writer, blocks all readers
 
 Timeline:
 ┌─────────────────────────────────────────────┐
-│ R1 R2 R3 │ W1 │ R4 R5 │ W2 │ R6          │
+│ R1 R2 R3 │ W1 │ R4 R5 │ W2 │ R6             │
 ├─────────────────────────────────────────────┤
 │ ← Multiple readers can run together         │
 │           ← Writer blocks all               │
@@ -548,11 +558,14 @@ Timeline:
 
 ## Atomics
 
+Concurrent unsynchronized access to the same non-atomic object from multiple threads is a **data race** → undefined behavior. `std::atomic<T>` (for trivially copyable `T` up to a platform-dependent size) provides lock-free or lock-based atomic operations. Default memory order is `memory_order_seq_cst` (strongest, easiest to reason about).
+
 ### std::atomic Basics
 ```cpp
 #include <atomic>
 #include <thread>
 #include <vector>
+#include <iostream>
 
 std::atomic<int> counter(0);  // Lock-free atomic integer
 
@@ -583,6 +596,7 @@ int main() {
 ### Atomic Operations
 ```cpp
 #include <atomic>
+#include <iostream>
 
 int main() {
     std::atomic<int> x(10);
@@ -601,13 +615,13 @@ int main() {
     int old = x.fetch_add(5);  // old = 24, x = 29
     old = x.fetch_sub(4);      // old = 29, x = 25
     
-    // Compare and swap
+    // Compare-and-swap (strong: no spurious failure; weak: may fail spuriously, use in loops)
     int expected = 25;
     bool success = x.compare_exchange_strong(expected, 30);
     // If x == expected, set x = 30, return true
     // Else, set expected = x, return false
     
-    // Check if lock-free
+    // Check if lock-free (may use internal mutex on some platforms)
     if (x.is_lock_free()) {
         std::cout << "Lock-free implementation\n";
     }
@@ -661,15 +675,22 @@ int main() {
 │ acq_rel          │ Read-modify-write  │ Both           │
 │ seq_cst (default)│ When unsure        │ Full ordering  │
 │                                                        │
-│ Relaxed: Fastest, no synchronization                  │
-│ Acquire/Release: Common, publish-subscribe pattern    │
-│ Sequential: Slowest, easiest to reason about          │
+│ Relaxed: Fastest, no synchronization                   │
+│ Acquire/Release: Common, publish-subscribe pattern     │
+│ Sequential: Slowest, easiest to reason about           │
 └────────────────────────────────────────────────────────┘
 ```
+
+⚠️ **Gotchas**:
+- **Release → acquire** pairing establishes *happens-before*: writes before `release` are visible to reads after a matching `acquire`.
+- `relaxed` provides no cross-thread ordering — fine for independent counters, not for publishing shared data.
+- `compare_exchange_weak` may spuriously fail; prefer it in retry loops, `strong` when you need a single attempt.
 
 ---
 
 ## Condition Variables
+
+`std::condition_variable` requires `std::unique_lock<std::mutex>` (not `lock_guard`). Always call `wait` with a **predicate** to handle spurious wakeups. You must hold the lock when calling `wait`; `notify_one`/`notify_all` may be called with or without the lock held (notify-without-lock can reduce contention).
 
 ### Basic Wait and Notify
 ```cpp
@@ -934,17 +955,18 @@ public:
 
 ### 1. Always Prefer RAII Locks
 ```cpp
-// BAD
+// BAD — unlock skipped if an exception is thrown
 mtx.lock();
 // ... work ...
 mtx.unlock();
 
-// GOOD
+// GOOD — lock released on scope exit, even during stack unwinding
 {
     std::lock_guard<std::mutex> lock(mtx);
     // ... work ...
 }  // Automatically unlocked
 ```
+See [Exception Handling](17_exceptions.md) for how RAII interacts with exception safety guarantees.
 
 ### 2. Keep Critical Sections Small
 ```cpp
@@ -1443,10 +1465,20 @@ This example shows a real-world use case for multithreading!
 
 ---
 
+## Related Topics
+
+- [Async and Futures](15_async_futures.md) — `std::async`, futures, and thread pools as higher-level alternatives to raw `std::thread`
+- [Advanced Features](12_advanced_features.md) — move semantics, smart pointers, and RAII patterns that underpin safe locking
+- [Exception Handling](17_exceptions.md) — why RAII locks matter during stack unwinding; `noexcept` on destructors
+- [Best Practices](13_best_practices.md) — const-correctness and design choices that reduce shared-state bugs
+- [Modern C++20/23 Features](07_modern_features.md) — `std::jthread`, `std::stop_token`, and other concurrency-related C++20 additions
+- [Coroutines](22_coroutines.md) — structured concurrency and async I/O as an alternative to thread-per-task models
+- [Quick Reference](99_quick_reference.md) — concurrency primitives at a glance
+
 ## Next Steps
 - **Next**: [Async and Futures →](15_async_futures.md)
 - **Previous**: [← Best Practices](13_best_practices.md)
 
 ---
-*Part 14 of 22 - Multithreading and Concurrency*
+*Chapter 14 — Multithreading and Concurrency*
 

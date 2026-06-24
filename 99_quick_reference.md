@@ -321,8 +321,9 @@ void func(T value) { }
 // Ranges
 auto result = v | std::views::filter(pred) | std::views::transform(fn);
 
-// Coroutines
-generator<int> range(int start, int end) {
+// Coroutines (C++20 adds the language keywords co_await/co_yield/co_return).
+// std::generator itself is C++23 (<generator>); in C++20 you hand-roll a type.
+std::generator<int> range(int start, int end) {   // <generator>, C++23
     for (int i = start; i < end; ++i) {
         co_yield i;
     }
@@ -1440,18 +1441,43 @@ R"(...$)"             // End of string
 
 ---
 
-## See Also
+## See Also — Full Chapter Index
 
-- [OOP Concepts](00_oop_concepts.md) - Object-oriented fundamentals
-- [Sequence Containers](01_sequence_containers.md) - vector, list, deque
-- [Algorithms](06_algorithms.md) - Comprehensive algorithm reference
-- [Modern Features](07_modern_features.md) - C++20/23 ranges and views
-- [Templates](09_templates.md) - Generic programming
-- [Best Practices](13_best_practices.md) - Detailed best practices guide
-- [Multithreading](14_multithreading.md) - Concurrency in depth
+**Foundations & Containers**
+- [00 · OOP Concepts](00_oop_concepts.md) — classes, inheritance, polymorphism
+- [01 · Sequence Containers](01_sequence_containers.md) — vector, deque, list, array
+- [02 · Associative Containers](02_associative_containers.md) — set, map (ordered)
+- [03 · Unordered Containers](03_unordered_containers.md) — hash-based set/map
+- [04 · Container Adaptors](04_container_adaptors.md) — stack, queue, priority_queue
+- [05 · Iterators](05_iterators.md) — categories & invalidation
+- [06 · Algorithms](06_algorithms.md) — sort, find, transform, numeric
+- [07 · Modern Features](07_modern_features.md) — ranges, views, concepts, span
+- [08 · Utility Containers](08_utility_containers.md) — string, optional, variant, tuple
+
+**Generic & Advanced C++**
+- [09 · Templates](09_templates.md) — generic programming
+- [10 · Lambdas](10_lambdas.md) — closures & functional patterns
+- [11 · Metaprogramming](11_metaprogramming.md) — constexpr, type traits
+- [12 · Advanced Features](12_advanced_features.md) — move semantics, smart pointers, RAII
+- [13 · Best Practices](13_best_practices.md) — idioms & anti-patterns
+
+**Concurrency, I/O & Systems**
+- [14 · Multithreading](14_multithreading.md) — threads, mutexes, atomics
+- [15 · Async & Futures](15_async_futures.md) — async, promise/future, parallelism
+- [16 · I/O & Filesystem](16_io_filesystem.md) — streams, filesystem, format/print
+- [17 · Exceptions](17_exceptions.md) — safety guarantees, expected
+- [18 · Time & Chrono](18_time_chrono.md) — durations, clocks, calendars
+- [19 · Memory & Allocators](19_memory_allocators.md) — PMR, alignment, pools
+- [20 · Regex](20_regex.md) — pattern matching
+- [21 · Modules](21_modules.md) — C++20 modules
+- [22 · Coroutines](22_coroutines.md) — co_await/co_yield/co_return
+
+> Tip: the [Container Selection Guide](#container-selection-guide) and
+> [Time Complexity table](#time-complexity-quick-reference) above are the two
+> fastest ways to pick the right container.
 
 ---
 
-*Quick Reference Guide - Bookmark this page for fast lookup during development*
+*Quick Reference Guide — Bookmark this page for fast lookup during development*
 
 

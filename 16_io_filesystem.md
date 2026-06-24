@@ -2,7 +2,7 @@
 
 ## Overview
 
-C++ provides comprehensive facilities for input/output operations, file system manipulation, and modern string formatting. This chapter covers everything from basic I/O to C++20's formatting library.
+C++ provides comprehensive facilities for input/output, filesystem manipulation, and modern string formatting. For error handling during I/O, see [Exception Handling](17_exceptions.md); for time formatting in logs, see [Time and Chrono](18_time_chrono.md).
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -54,6 +54,7 @@ int main() {
 ### Stream State Flags
 ```cpp
 #include <iostream>
+#include <limits>
 
 int main() {
     int value;
@@ -166,6 +167,9 @@ int main() {
 ```
 
 ### Binary File I/O
+
+⚠️ **Gotcha**: Writing raw structs with `write()` is fragile — padding, endianness, and version changes break portability. Prefer explicit serialization or a format like JSON/Protobuf for durable storage.
+
 ```cpp
 #include <fstream>
 #include <vector>
@@ -386,6 +390,8 @@ int main() {
 
 ## std::filesystem (C++17)
 
+`std::filesystem` operations have two overload styles: **throwing** (default, throws `std::filesystem::filesystem_error`) and **non-throwing** (`std::error_code&` out-parameter). Prefer the `error_code` overload in library code and hot paths where you handle failures explicitly — see [Exception Handling](17_exceptions.md) for `std::error_code` vs exceptions.
+
 ### Path Operations
 ```cpp
 #include <filesystem>
@@ -427,16 +433,25 @@ int main() {
 ```cpp
 #include <filesystem>
 #include <fstream>
+#include <system_error>
+#include <iostream>
 
 namespace fs = std::filesystem;
 
 int main() {
-    // Check existence
+    // Non-throwing overload (preferred in robust code)
+    std::error_code ec;
+    if (!fs::exists("file.txt", ec)) {
+        if (ec) std::cerr << ec.message() << '\n';
+        else std::cout << "File does not exist\n";
+    }
+    
+    // Throwing overload — convenient in scripts, risky in libraries
     if (fs::exists("file.txt")) {
         std::cout << "File exists\n";
     }
     
-    // File size
+    // File size (throws if missing)
     uintmax_t size = fs::file_size("file.txt");
     std::cout << "Size: " << size << " bytes\n";
     
@@ -573,6 +588,8 @@ int main() {
 
 ## std::format (C++20)
 
+Type-safe, Python-style formatting — the modern replacement for `sprintf` and most `stringstream` use cases. Check `__cpp_lib_format` before relying on it; libc++ and libstdc++ both ship it in recent releases.
+
 ### Basic Formatting
 ```cpp
 #include <format>
@@ -590,9 +607,6 @@ int main() {
     
     // Positional arguments
     std::string s5 = std::format("{1} {0}", "World", "Hello");  // "Hello World"
-    
-    // Named arguments (C++20)
-    std::string s6 = std::format("{0} is {1} years old", "Alice", 25);
     
     std::cout << s1 << std::endl;
     
@@ -670,23 +684,28 @@ int main() {
 ```
 
 ### std::print (C++23)
+
+Direct formatted output without building an intermediate `std::string`. `std::println` appends a newline.
+
 ```cpp
 #include <print>
 
 int main() {
-    // Direct printing (no need to create string)
+    // Direct printing (no intermediate string)
     std::print("Hello, {}!\n", "World");
     std::print("Number: {}\n", 42);
     
-    // Print to file
+    // Print to stderr
     std::print(std::cerr, "Error: {}\n", "Something went wrong");
     
-    // Equivalent to format + cout
-    // std::print(format_string, args...) == std::cout << std::format(...)
+    // std::println adds '\n' automatically
+    std::println("Done");
     
     return 0;
 }
 ```
+
+💡 **Hunch**: `std::print` requires `__cpp_lib_print` (C++23). Apple Clang/libc++ added it in Xcode 16+; older toolchains should use `std::cout << std::format(...)` instead.
 
 ---
 
@@ -756,7 +775,7 @@ if (!file.is_open()) {
 
 ### 2. Use RAII for Files
 ```cpp
-// GOOD: Automatic cleanup
+// GOOD: Automatic cleanup — see [Advanced Features](12_advanced_features.md)
 {
     std::ofstream file("data.txt");
     file << "data";
@@ -1208,10 +1227,20 @@ This example shows real-world file and filesystem operations!
 
 ---
 
+## Related Topics
+
+- [Exception Handling](17_exceptions.md) — `std::filesystem::filesystem_error`, `std::error_code` overloads, and I/O exception safety
+- [Regex](20_regex.md) — pattern matching for log parsing and text processing (used in the example)
+- [Time and Chrono](18_time_chrono.md) — timestamp formatting with `std::chrono` and `std::put_time`
+- [Async and Futures](15_async_futures.md) — parallel file processing with `std::async`
+- [Advanced Features](12_advanced_features.md) — RAII for streams and move semantics for `fstream`
+- [Modern C++20/23 Features](07_modern_features.md) — `std::format`, `std::print`, and other formatting additions
+- [Quick Reference](99_quick_reference.md) — I/O and filesystem APIs at a glance
+
 ## Next Steps
 - **Next**: [Exception Handling →](17_exceptions.md)
 - **Previous**: [← Async Programming](15_async_futures.md)
 
 ---
-*Part 16 of 22 - I/O, Filesystem, and Formatting*
+*Chapter 16 — I/O, Filesystem, and Formatting*
 

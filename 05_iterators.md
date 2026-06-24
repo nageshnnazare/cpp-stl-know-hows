@@ -2,7 +2,9 @@
 
 ## Overview
 
-Iterators are the glue between containers and algorithms in the STL. They provide a uniform way to traverse and access elements in containers, similar to pointers but more powerful and type-safe.
+Iterators are the glue between [containers](01_sequence_containers.md) and [algorithms](06_algorithms.md) in the STL. They provide a uniform way to traverse and access elements, similar to pointers but more abstract and type-safe.
+
+💡 **Hunch**: Almost every STL algorithm takes a **half-open range** `[first, last)` — `first` is inclusive, `last` is one-past-the-end. Empty range ⇔ `first == last`. This is why `end()` is not dereferenceable.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -29,8 +31,9 @@ Without iterators:
 - Each container needs its own set of algorithms
 
 With iterators:
-- std::sort works with ANY container that provides random access iterators
+- std::sort works with ANY container that provides random-access iterators ([cppreference](https://en.cppreference.com/w/cpp/named_req/RandomAccessIterator))
 - Write algorithm once, use everywhere
+- Container adaptors ([stack/queue/priority_queue](04_container_adaptors.md)) deliberately omit iterators
 ```
 
 ---
@@ -38,29 +41,29 @@ With iterators:
 ## Iterator Categories
 
 ### Category Hierarchy
-```
-┌─────────────────────────────────────────────────────────┐
-│              ITERATOR CATEGORY HIERARCHY                │
-│                                                         │
-│                    Input Iterator                       │
-│                          │                              │
-│                    Output Iterator                      │
-│                          │                              │
-│                  Forward Iterator                       │
-│                  (combines Input+Output)                │
-│                          │                              │
-│                 Bidirectional Iterator                  │
-│                  (can move backward)                    │
-│                          │                              │
-│               Random Access Iterator                    │
-│                (can jump to any position)               │
-│                          │                              │
-│             Contiguous Iterator (C++20)                 │
-│              (elements in contiguous memory)            │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
 
-Higher categories support all operations of lower categories
+Input and output iterators are **separate** single-pass categories. Forward iterators combine multi-pass read/write; each higher category adds operations:
+
+```
+                    Input Iterator        Output Iterator
+                    (single-pass read)    (single-pass write)
+                           \               /
+                            \             /
+                            Forward Iterator
+                         (multi-pass read/write)
+                                  │
+                         Bidirectional Iterator
+                             (--it, it--)
+                                  │
+                        Random Access Iterator
+                        (it+n, it[n], it-it, <)
+                                  │
+                       Contiguous Iterator (C++20)
+                      (elements in contiguous storage;
+                       std::to_address(it) is valid)
+
+Higher categories include all capabilities of lower ones
+(except input/output, which are not in a single line).
 ```
 
 ### 1. Input Iterator
@@ -229,6 +232,7 @@ Example: std::vector::iterator, std::deque::iterator
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
 int main() {
     std::vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -296,16 +300,19 @@ int main() {
 
 ### Visual Comparison of Iterator Categories
 ```
-Container          | Iterator Category      | Operations
--------------------|------------------------|---------------------------
-istream_iterator   | Input                  | →
-ostream_iterator   | Output                 | →
-forward_list       | Forward                | → →
-list               | Bidirectional          | ← → ← →
-set/map            | Bidirectional          | ← → ← →
-deque              | Random Access          | ←5→ [n]
-vector             | Random Access/Contiguous| ←5→ [n] *ptr
-array              | Random Access/Contiguous| ←5→ [n] *ptr
+Container / Iterator   | Category              | Key ops
+-----------------------|-----------------------|---------------------------
+istream_iterator       | Input                 | → read once
+ostream_iterator       | Output                | → write once
+forward_list           | Forward               | → multi-pass
+unordered_set/map      | Forward (const)       | → (no --)
+list, set, map         | Bidirectional         | ← →
+deque                  | Random Access         | ←5→ [n]  (not contiguous*)
+vector, array, string  | Contiguous (C++20)    | ←5→ [n] + contiguous ptr
+stack/queue/pq         | (none)                | adaptors have no iterators
+
+* deque iterators are random-access but elements are not contiguous in memory.
+  See [Sequence Containers](01_sequence_containers.md).
 ```
 
 ---
@@ -317,6 +324,7 @@ array              | Random Access/Contiguous| ←5→ [n] *ptr
 ```cpp
 #include <vector>
 #include <iostream>
+#include <iterator>
 
 int main() {
     std::vector<int> vec = {10, 20, 30, 40, 50};
@@ -447,15 +455,15 @@ int main() {
 Vector: [1, 2, 3, 4, 5]
 
 Forward:  begin()        end()
-             ↓             ↓
+            ↓              ↓
            [1][2][3][4][5][ ]
             ↑           ↑
          *begin()    *(end()-1)
 
 Reverse:  rend()      rbegin()
-             ↓             ↓
+            ↓              ↓
            [ ][1][2][3][4][5]
-                         ↑
+                           ↑
                      *rbegin()
 
 Conversion:
@@ -472,7 +480,11 @@ rit.base() points to 4 (one past rit)!
 ## Iterator Adaptors
 
 ### 1. Insert Iterators
+
+Insert iterators are **output iterators** that call container `insert`/`push_back`/`push_front` instead of writing through a fixed slot — the only way algorithms can grow a container. Requires `#include <iterator>`.
+
 ```cpp
+#include <deque>
 #include <vector>
 #include <iterator>
 #include <algorithm>
@@ -670,9 +682,10 @@ void my_advance(Iterator& it, int n) {
 ```cpp
 #include <iterator>
 #include <vector>
+#include <list>
 #include <concepts>
 
-// C++20 provides concepts for iterators
+// C++20 provides concepts for iterators (see also 07_modern_features.md)
 template<typename I>
 concept my_input_iterator = std::input_iterator<I>;
 
@@ -813,9 +826,7 @@ public:
 
 ### Range-based for Loop Requirements
 ```cpp
-// For range-based for loop to work, need:
-// 1. begin() and end() methods
-// 2. Iterator with !=, ++, and * operators
+#include <iostream>
 
 class Range {
     int start_, end_;
@@ -942,6 +953,9 @@ int main() {
 ## Common Patterns and Idioms
 
 ### Pattern 1: Erase-Remove Idiom
+
+`std::remove` / `std::remove_if` **do not erase** — they compact elements and return the new logical end. You must call `erase` on sequence containers. Full treatment in [Algorithms](06_algorithms.md).
+
 ```cpp
 #include <vector>
 #include <algorithm>
@@ -949,19 +963,11 @@ int main() {
 int main() {
     std::vector<int> vec = {1, 2, 3, 2, 4, 2, 5};
     
-    // Remove all 2s
-    // Step 1: std::remove moves elements to keep to front, returns new end
+    // C++20: std::erase / std::erase_if (no manual erase-remove)
+    // std::erase(vec, 2);
+
     auto new_end = std::remove(vec.begin(), vec.end(), 2);
-    // vec = {1, 3, 4, 5, ?, ?, ?}
-    //                    ^
-    //                 new_end
-    
-    // Step 2: Erase the "removed" elements
-    vec.erase(new_end, vec.end());
-    // vec = {1, 3, 4, 5}
-    
-    // Or in one line:
-    vec.erase(std::remove(vec.begin(), vec.end(), 2), vec.end());
+    vec.erase(new_end, vec.end());  // vec = {1, 3, 4, 5}
     
     return 0;
 }
@@ -971,6 +977,8 @@ int main() {
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <iterator>
 
 int main() {
     std::vector<int> vec = {1, 2, 3, 4, 5};
@@ -1090,15 +1098,20 @@ for (auto it = vec.begin(); it != vec.end(); ) {
 ```
 
 ### 4. Comparing Iterators from Different Containers
+
+Iterators from different containers (or even different elements of the same `deque`) may compare only if they refer to the same sequence. Comparing `vec1.begin()` to `vec2.begin()` is undefined behavior.
+
 ```cpp
+#include <vector>
+
 std::vector<int> vec1 = {1, 2, 3};
 std::vector<int> vec2 = {4, 5, 6};
 
-// BAD: Undefined behavior!
-// if (vec1.begin() == vec2.begin()) { /* ... */ }
+// BAD: undefined behavior
+// if (vec1.begin() == vec2.begin()) { }
 
-// Only compare iterators from same container
-if (vec1.begin() == vec1.end()) { /* OK */ }
+// OK: same container, valid range
+if (vec1.begin() == vec1.end()) { /* empty */ }
 ```
 
 ---
@@ -1147,6 +1160,7 @@ Here's a comprehensive example showing custom iterators, iterator adapters, and 
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <numeric>   // std::accumulate
 
 // 1. Custom linked list with bidirectional iterator
 template<typename T>
@@ -1553,8 +1567,7 @@ int main() {
 - **Custom iterators**: Implementing all required operations
 - **Iterator traits**: Defining iterator_category, value_type, etc.
 - **Bidirectional iterator**: Forward and backward traversal
-- **Input iterator**: Single-pass forward iteration
-- **Random access iterator**: Full arithmetic support
+- **Input iterator**: Single-pass forward iteration (Range generator)
 - **Iterator adapters**: Filter and transform views
 - **back_inserter**: Inserting while iterating
 - **reverse_iterator**: Backward iteration
@@ -1568,10 +1581,19 @@ This example shows how to create reusable, STL-compatible iterators!
 
 ---
 
+## Related Topics
+
+- [Algorithms](06_algorithms.md) — the primary consumers of `[first, last)` iterator ranges
+- [Sequence Containers](01_sequence_containers.md) — `vector`/`deque`/`list` iterator categories and invalidation rules
+- [Container Adaptors](04_container_adaptors.md) — `stack`, `queue`, and `priority_queue` intentionally provide no iterators
+- [Modern C++20/23 Features](07_modern_features.md) — `std::ranges`, views, and iterator concepts in the ranges library
+- [Move Semantics & RAII](12_advanced_features.md) — `std::make_move_iterator` and efficient transfers
+- [Templates](09_templates.md) — writing iterator-based algorithm templates with traits/concepts
+
 ## Next Steps
 - **Next**: [Algorithms →](06_algorithms.md)
 - **Previous**: [← Container Adaptors](04_container_adaptors.md)
 
 ---
-*Part 5 of 22 - Iterators*
+*Chapter 5 — Iterators*
 
