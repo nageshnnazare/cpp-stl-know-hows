@@ -1553,11 +1553,13 @@ int main() {
         ├─► Works with custom types
         └─► Works with any compatible type
 </code></pre>
-<p><strong>Separation of Concerns</strong>:
-- Containers know how to store data
-- Iterators know how to traverse data
-- Algorithms know how to process data
-- Each component is independent and reusable</p>
+<p><strong>Separation of Concerns</strong>:</p>
+<ul>
+<li>Containers know how to store data</li>
+<li>Iterators know how to traverse data</li>
+<li>Algorithms know how to process data</li>
+<li>Each component is independent and reusable</li>
+</ul>
 <h2 id="benefits-of-stl">Benefits of STL</h2>
 <ol>
 <li>✓ <strong>Reusability</strong>: Don&rsquo;t reinvent the wheel</li>
@@ -1647,17 +1649,19 @@ Total: 23 comprehensive chapters with examples and diagrams
 <hr />
 <h2 id="-additional-resources">📖 Additional Resources</h2>
 <h3 id="quick-reference-guide-"><a href="99_quick_reference.md">Quick Reference Guide</a> ⭐</h3>
-<p><strong>Condensed cheat sheet for daily development:</strong>
-- Container selection decision tree
-- Time complexity table for all containers
-- Most common algorithms with syntax
-- C++11/14/17/20/23 feature lookup
-- Common design patterns
-- Performance tips
-- Complete gotchas checklist
-- Container operations reference
-- Lambda syntax guide
-- Smart pointer reference</p>
+<p><strong>Condensed cheat sheet for daily development:</strong></p>
+<ul>
+<li>Container selection decision tree</li>
+<li>Time complexity table for all containers</li>
+<li>Most common algorithms with syntax</li>
+<li>C++11/14/17/20/23 feature lookup</li>
+<li>Common design patterns</li>
+<li>Performance tips</li>
+<li>Complete gotchas checklist</li>
+<li>Container operations reference</li>
+<li>Lambda syntax guide</li>
+<li>Smart pointer reference</li>
+</ul>
 <p><strong>Bookmark this page for fast lookup while coding!</strong></p>
 <hr />
 <p><em>Complete tutorial: 23 comprehensive chapters + quick reference guide</em>
@@ -3858,34 +3862,44 @@ int main() {
 }
 </code></pre>
 <h3 id="concepts-demonstrated-in-example">Concepts Demonstrated in Example:</h3>
-<p><strong>Encapsulation:</strong>
-- Private member variables (balance_, account_number_)
-- Public interface methods (deposit, withdraw)
-- Protected members for derived classes
-- Private helper methods (is_within_limit)</p>
-<p><strong>Inheritance:</strong>
-- Base class (Account)
-- Derived classes (CheckingAccount, SavingsAccount, PremiumAccount)
-- Constructor chaining
-- Protected members accessible to derived classes</p>
-<p><strong>Polymorphism:</strong>
-- Virtual functions (withdraw, deposit, get_account_type)
-- Override keyword
-- Runtime polymorphism through base class pointers
-- Pure virtual functions (abstract methods)</p>
-<p><strong>Abstraction:</strong>
-- Abstract base class (Account)
-- Pure virtual functions forcing implementation
-- Interface classes (Transferable, Reportable)
-- Hiding implementation details</p>
-<p><strong>Additional Concepts:</strong>
-- Multiple inheritance (PremiumAccount)
-- Multiple interfaces
-- Smart pointers (unique_ptr)
-- Exception handling
-- RAII (automatic resource management)
-- Const correctness
-- Static constexpr for constants</p>
+<p><strong>Encapsulation:</strong></p>
+<ul>
+<li>Private member variables (balance_, account_number_)</li>
+<li>Public interface methods (deposit, withdraw)</li>
+<li>Protected members for derived classes</li>
+<li>Private helper methods (is_within_limit)</li>
+</ul>
+<p><strong>Inheritance:</strong></p>
+<ul>
+<li>Base class (Account)</li>
+<li>Derived classes (CheckingAccount, SavingsAccount, PremiumAccount)</li>
+<li>Constructor chaining</li>
+<li>Protected members accessible to derived classes</li>
+</ul>
+<p><strong>Polymorphism:</strong></p>
+<ul>
+<li>Virtual functions (withdraw, deposit, get_account_type)</li>
+<li>Override keyword</li>
+<li>Runtime polymorphism through base class pointers</li>
+<li>Pure virtual functions (abstract methods)</li>
+</ul>
+<p><strong>Abstraction:</strong></p>
+<ul>
+<li>Abstract base class (Account)</li>
+<li>Pure virtual functions forcing implementation</li>
+<li>Interface classes (Transferable, Reportable)</li>
+<li>Hiding implementation details</li>
+</ul>
+<p><strong>Additional Concepts:</strong></p>
+<ul>
+<li>Multiple inheritance (PremiumAccount)</li>
+<li>Multiple interfaces</li>
+<li>Smart pointers (unique_ptr)</li>
+<li>Exception handling</li>
+<li>RAII (automatic resource management)</li>
+<li>Const correctness</li>
+<li>Static constexpr for constants</li>
+</ul>
 <hr />
 <h2 id="summary-of-oop-gotchas">Summary of OOP Gotchas</h2>
 <h3 id="top-10-common-mistakes">Top 10 Common Mistakes</h3>
@@ -4088,9 +4102,11 @@ push_back(5):  REALLOCATION (4 -&gt; 8)
          [1][2][3][4][5][?][?][?]
          capacity=8, size=5
 </code></pre>
-<p><strong>Growth factor by implementation:</strong>
-- libstdc++ (GCC) and libc++ (Clang): <strong>2x</strong>
-- MSVC: <strong>1.5x</strong> (capacities grow <code>1, 2, 3, 4, 6, 9, ...</code>)</p>
+<p><strong>Growth factor by implementation:</strong></p>
+<ul>
+<li>libstdc++ (GCC) and libc++ (Clang): <strong>2x</strong></li>
+<li>MSVC: <strong>1.5x</strong> (capacities grow <code>1, 2, 3, 4, 6, 9, ...</code>)</li>
+</ul>
 <p>A factor below 2 lets freed blocks be reused by later allocations, which can
 reduce memory fragmentation — that is the rationale behind MSVC&rsquo;s 1.5x.</p>
 <blockquote>
@@ -4581,18 +4597,22 @@ for (int i = 0; i &lt; 100; ++i) {
 // Which is faster for 10,000 insertions?
 </code></pre>
 <h3 id="exercise-3-when-to-use-each-container">Exercise 3: When to Use Each Container</h3>
-<p>Given these scenarios, choose the best container:
-1. Store coordinates (x, y, z) for 3D point - always 3 values
-2. Implement a web browser&rsquo;s back/forward navigation
-3. Implement a text editor with undo/redo
-4. Store game high scores that need sorting
-5. LRU cache implementation</p>
-<p><strong>Answers:</strong>
-1. <code>std::array&lt;double, 3&gt;</code> — fixed size, no heap allocation.
-2. <code>std::deque&lt;Page&gt;</code> or two <code>std::stack</code>s — you push/pop at both ends (or use back/forward stacks). A <code>std::vector</code> works too if you only grow one side.
-3. <code>std::vector&lt;State&gt;</code> with an index, or <code>std::list&lt;State&gt;</code> — undo/redo is mostly push/pop at one end, so a <code>vector</code> is usually the cache-friendlier choice; reach for <code>list</code> only if you must splice from the middle.
-4. <code>std::vector&lt;int&gt;</code> — contiguous storage sorts fastest (see <a href="06_algorithms.md">Algorithms</a>).
-5. <strong>LRU cache</strong> needs <em>two</em> structures working together: a <code>std::list&lt;std::pair&lt;Key,Value&gt;&gt;</code> for recency order (move-to-front in O(1) via <code>splice</code>) <strong>plus</strong> a <code>std::unordered_map&lt;Key, list::iterator&gt;</code> for O(1) lookup. A list alone gives O(n) lookups. See <a href="03_unordered_containers.md">Unordered Containers</a>.</p>
+<p>Given these scenarios, choose the best container:</p>
+<ol>
+<li>Store coordinates (x, y, z) for 3D point - always 3 values</li>
+<li>Implement a web browser&rsquo;s back/forward navigation</li>
+<li>Implement a text editor with undo/redo</li>
+<li>Store game high scores that need sorting</li>
+<li>LRU cache implementation</li>
+</ol>
+<p><strong>Answers:</strong></p>
+<ol>
+<li><code>std::array&lt;double, 3&gt;</code> — fixed size, no heap allocation.</li>
+<li><code>std::deque&lt;Page&gt;</code> or two <code>std::stack</code>s — you push/pop at both ends (or use back/forward stacks). A <code>std::vector</code> works too if you only grow one side.</li>
+<li><code>std::vector&lt;State&gt;</code> with an index, or <code>std::list&lt;State&gt;</code> — undo/redo is mostly push/pop at one end, so a <code>vector</code> is usually the cache-friendlier choice; reach for <code>list</code> only if you must splice from the middle.</li>
+<li><code>std::vector&lt;int&gt;</code> — contiguous storage sorts fastest (see <a href="06_algorithms.md">Algorithms</a>).</li>
+<li><strong>LRU cache</strong> needs <em>two</em> structures working together: a <code>std::list&lt;std::pair&lt;Key,Value&gt;&gt;</code> for recency order (move-to-front in O(1) via <code>splice</code>) <strong>plus</strong> a <code>std::unordered_map&lt;Key, list::iterator&gt;</code> for O(1) lookup. A list alone gives O(n) lookups. See <a href="03_unordered_containers.md">Unordered Containers</a>.</li>
+</ol>
 <hr />
 <h2 id="common-pitfalls">Common Pitfalls</h2>
 <h3 id="1-vector-reallocation">1. Vector Reallocation</h3>
@@ -16157,10 +16177,12 @@ void demo() {
     // Does NOT capture: global, or the static local s (both accessed by name)
 }
 </code></pre>
-<p>⚠️ <strong>Gotchas</strong>
-- <code>[this]</code> stores a <strong>pointer</strong> to the enclosing object. If the lambda outlives <code>*this</code>, it dangles — same risk as a raw pointer. Prefer <code>[*this]</code> (C++17) when the lambda must survive the call that created it.
-- <code>[=]</code> and <code>[&amp;]</code> in a member function implicitly capture <code>this</code> (as a pointer), not individual data members. Implicit <code>this</code> capture via <code>[=]</code> is <strong>deprecated since C++20</strong> (P0806) — write <code>[=, this]</code> (or <code>[this]</code>) explicitly.
-- Default captures (<code>[=]</code>/<code>[&amp;]</code>) never capture <code>static</code> or global variables — those are accessed directly by name.</p>
+<p>⚠️ <strong>Gotchas</strong></p>
+<ul>
+<li><code>[this]</code> stores a <strong>pointer</strong> to the enclosing object. If the lambda outlives <code>*this</code>, it dangles — same risk as a raw pointer. Prefer <code>[*this]</code> (C++17) when the lambda must survive the call that created it.</li>
+<li><code>[=]</code> and <code>[&amp;]</code> in a member function implicitly capture <code>this</code> (as a pointer), not individual data members. Implicit <code>this</code> capture via <code>[=]</code> is <strong>deprecated since C++20</strong> (P0806) — write <code>[=, this]</code> (or <code>[this]</code>) explicitly.</li>
+<li>Default captures (<code>[=]</code>/<code>[&amp;]</code>) never capture <code>static</code> or global variables — those are accessed directly by name.</li>
+</ul>
 <h3 id="visual-capture-behavior">Visual: Capture Behavior</h3>
 <pre><code>Original Variables:
 ┌─────┬─────┐
@@ -18590,10 +18612,12 @@ public:
 <li><strong>Prvalue</strong> (pure rvalue) — temporaries, literals; <code>42</code>, <code>std::string("hi")</code></li>
 </ul>
 <p><code>std::move</code> does <strong>not</strong> move anything — it is only an <code>static_cast</code> to an rvalue reference, enabling overload resolution to pick move constructors/assignment. The actual transfer happens in the move operation.</p>
-<p>⚠️ <strong>Gotchas</strong>
-- Moved-from objects remain <strong>valid but unspecified</strong> — you may assign to them or destroy them, but don&rsquo;t assume their value.
-- Never <code>std::move</code> a <code>return</code> of a local variable — it can <strong>block NRVO</strong> and pessimizes codegen. Just <code>return local;</code>.
-- Move constructors should be marked <code>noexcept</code> when possible — <code>std::vector</code> uses copy instead of move if the move operation may throw.</p>
+<p>⚠️ <strong>Gotchas</strong></p>
+<ul>
+<li>Moved-from objects remain <strong>valid but unspecified</strong> — you may assign to them or destroy them, but don&rsquo;t assume their value.</li>
+<li>Never <code>std::move</code> a <code>return</code> of a local variable — it can <strong>block NRVO</strong> and pessimizes codegen. Just <code>return local;</code>.</li>
+<li>Move constructors should be marked <code>noexcept</code> when possible — <code>std::vector</code> uses copy instead of move if the move operation may throw.</li>
+</ul>
 <h3 id="lvalues-vs-rvalues-classic-view">Lvalues vs Rvalues (Classic View)</h3>
 <pre><code>┌────────────────────────────────────────────────────────┐
 │              Lvalues vs Rvalues                        │
@@ -20648,46 +20672,58 @@ int main() {
 }
 </code></pre>
 <h3 id="best-practices-demonstrated">Best Practices Demonstrated:</h3>
-<p><strong>Design &amp; Architecture:</strong>
-- ✅ Strong types (UserId, Email)
-- ✅ Dependency injection
-- ✅ Separation of concerns
-- ✅ Clear ownership semantics
-- ✅ Repository pattern</p>
-<p><strong>Modern C++ Features:</strong>
-- ✅ Rule of Zero
-- ✅ Smart pointers (unique_ptr)
-- ✅ Ranges and views
-- ✅ Structured bindings
-- ✅ std::variant for errors
-- ✅ std::optional for optional values
-- ✅ constexpr for constants
-- ✅ Designated initializers
-- ✅ Spaceship operator (&lt;=&gt;)
-- ✅ [[nodiscard]] attribute</p>
-<p><strong>Resource Management:</strong>
-- ✅ RAII everywhere
-- ✅ No manual memory management
-- ✅ Clear ownership transfer
-- ✅ No raw pointers in interfaces</p>
-<p><strong>Error Handling:</strong>
-- ✅ Exceptions for construction errors
-- ✅ noexcept for non-throwing functions
-- ✅ Result type for recoverable errors
-- ✅ Optional for missing values</p>
-<p><strong>Code Quality:</strong>
-- ✅ Const-correctness
-- ✅ Input validation
-- ✅ Clear naming
-- ✅ Single responsibility
-- ✅ Comprehensive error handling
-- ✅ Performance measurement</p>
-<p><strong>Performance:</strong>
-- ✅ Move semantics
-- ✅ string_view for parameters
-- ✅ Lazy evaluation with views
-- ✅ No unnecessary copies
-- ✅ Reserve when needed</p>
+<p><strong>Design &amp; Architecture:</strong></p>
+<ul>
+<li>✅ Strong types (UserId, Email)</li>
+<li>✅ Dependency injection</li>
+<li>✅ Separation of concerns</li>
+<li>✅ Clear ownership semantics</li>
+<li>✅ Repository pattern</li>
+</ul>
+<p><strong>Modern C++ Features:</strong></p>
+<ul>
+<li>✅ Rule of Zero</li>
+<li>✅ Smart pointers (unique_ptr)</li>
+<li>✅ Ranges and views</li>
+<li>✅ Structured bindings</li>
+<li>✅ std::variant for errors</li>
+<li>✅ std::optional for optional values</li>
+<li>✅ constexpr for constants</li>
+<li>✅ Designated initializers</li>
+<li>✅ Spaceship operator (&lt;=&gt;)</li>
+<li>✅ [[nodiscard]] attribute</li>
+</ul>
+<p><strong>Resource Management:</strong></p>
+<ul>
+<li>✅ RAII everywhere</li>
+<li>✅ No manual memory management</li>
+<li>✅ Clear ownership transfer</li>
+<li>✅ No raw pointers in interfaces</li>
+</ul>
+<p><strong>Error Handling:</strong></p>
+<ul>
+<li>✅ Exceptions for construction errors</li>
+<li>✅ noexcept for non-throwing functions</li>
+<li>✅ Result type for recoverable errors</li>
+<li>✅ Optional for missing values</li>
+</ul>
+<p><strong>Code Quality:</strong></p>
+<ul>
+<li>✅ Const-correctness</li>
+<li>✅ Input validation</li>
+<li>✅ Clear naming</li>
+<li>✅ Single responsibility</li>
+<li>✅ Comprehensive error handling</li>
+<li>✅ Performance measurement</li>
+</ul>
+<p><strong>Performance:</strong></p>
+<ul>
+<li>✅ Move semantics</li>
+<li>✅ string_view for parameters</li>
+<li>✅ Lazy evaluation with views</li>
+<li>✅ No unnecessary copies</li>
+<li>✅ Reserve when needed</li>
+</ul>
 <p>This is a production-quality C++ application template!</p>
 <hr />
 <h2 id="related-topics">Related Topics</h2>
@@ -21331,10 +21367,12 @@ int main() {
 │ Sequential: Slowest, easiest to reason about           │
 └────────────────────────────────────────────────────────┘
 </code></pre>
-<p>⚠️ <strong>Gotchas</strong>:
-- <strong>Release → acquire</strong> pairing establishes <em>happens-before</em>: writes before <code>release</code> are visible to reads after a matching <code>acquire</code>.
-- <code>relaxed</code> provides no cross-thread ordering — fine for independent counters, not for publishing shared data.
-- <code>compare_exchange_weak</code> may spuriously fail; prefer it in retry loops, <code>strong</code> when you need a single attempt.</p>
+<p>⚠️ <strong>Gotchas</strong>:</p>
+<ul>
+<li><strong>Release → acquire</strong> pairing establishes <em>happens-before</em>: writes before <code>release</code> are visible to reads after a matching <code>acquire</code>.</li>
+<li><code>relaxed</code> provides no cross-thread ordering — fine for independent counters, not for publishing shared data.</li>
+<li><code>compare_exchange_weak</code> may spuriously fail; prefer it in retry loops, <code>strong</code> when you need a single attempt.</li>
+</ul>
 <hr />
 <h2 id="condition-variables">Condition Variables</h2>
 <p><code>std::condition_variable</code> requires <code>std::unique_lock&lt;std::mutex&gt;</code> (not <code>lock_guard</code>). Always call <code>wait</code> with a <strong>predicate</strong> to handle spurious wakeups. You must hold the lock when calling <code>wait</code>; <code>notify_one</code>/<code>notify_all</code> may be called with or without the lock held (notify-without-lock can reduce contention).</p>
@@ -31098,12 +31136,14 @@ int main() {
 <hr />
 <p><em>Chapter 22 — Coroutines (C++20)</em></p>
 <h2 id="summary">Summary</h2>
-<p>Coroutines are a powerful C++20 feature for:
-- ✓ Writing async code that looks synchronous
-- ✓ Creating lazy generators
-- ✓ Building state machines
-- ✓ Implementing cooperative multitasking
-- ✓ Avoiding callback hell</p>
+<p>Coroutines are a powerful C++20 feature for:</p>
+<ul>
+<li>✓ Writing async code that looks synchronous</li>
+<li>✓ Creating lazy generators</li>
+<li>✓ Building state machines</li>
+<li>✓ Implementing cooperative multitasking</li>
+<li>✓ Avoiding callback hell</li>
+</ul>
 <p>Start with simple generators, then move to async tasks!</p>
 <hr />
 <h2 id="-congratulations">🎉 Congratulations!</h2>
@@ -32397,32 +32437,38 @@ R&quot;(...$)&quot;             // End of string
 <strong>Patterns:</strong> RAII, Factory, Observer, Strategy, Singleton</p>
 <hr />
 <h2 id="see-also--full-chapter-index">See Also — Full Chapter Index</h2>
-<p><strong>Foundations &amp; Containers</strong>
-- <a href="00_oop_concepts.md">00 · OOP Concepts</a> — classes, inheritance, polymorphism
-- <a href="01_sequence_containers.md">01 · Sequence Containers</a> — vector, deque, list, array
-- <a href="02_associative_containers.md">02 · Associative Containers</a> — set, map (ordered)
-- <a href="03_unordered_containers.md">03 · Unordered Containers</a> — hash-based set/map
-- <a href="04_container_adaptors.md">04 · Container Adaptors</a> — stack, queue, priority_queue
-- <a href="05_iterators.md">05 · Iterators</a> — categories &amp; invalidation
-- <a href="06_algorithms.md">06 · Algorithms</a> — sort, find, transform, numeric
-- <a href="07_modern_features.md">07 · Modern Features</a> — ranges, views, concepts, span
-- <a href="08_utility_containers.md">08 · Utility Containers</a> — string, optional, variant, tuple</p>
-<p><strong>Generic &amp; Advanced C++</strong>
-- <a href="09_templates.md">09 · Templates</a> — generic programming
-- <a href="10_lambdas.md">10 · Lambdas</a> — closures &amp; functional patterns
-- <a href="11_metaprogramming.md">11 · Metaprogramming</a> — constexpr, type traits
-- <a href="12_advanced_features.md">12 · Advanced Features</a> — move semantics, smart pointers, RAII
-- <a href="13_best_practices.md">13 · Best Practices</a> — idioms &amp; anti-patterns</p>
-<p><strong>Concurrency, I/O &amp; Systems</strong>
-- <a href="14_multithreading.md">14 · Multithreading</a> — threads, mutexes, atomics
-- <a href="15_async_futures.md">15 · Async &amp; Futures</a> — async, promise/future, parallelism
-- <a href="16_io_filesystem.md">16 · I/O &amp; Filesystem</a> — streams, filesystem, format/print
-- <a href="17_exceptions.md">17 · Exceptions</a> — safety guarantees, expected
-- <a href="18_time_chrono.md">18 · Time &amp; Chrono</a> — durations, clocks, calendars
-- <a href="19_memory_allocators.md">19 · Memory &amp; Allocators</a> — PMR, alignment, pools
-- <a href="20_regex.md">20 · Regex</a> — pattern matching
-- <a href="21_modules.md">21 · Modules</a> — C++20 modules
-- <a href="22_coroutines.md">22 · Coroutines</a> — co_await/co_yield/co_return</p>
+<p><strong>Foundations &amp; Containers</strong></p>
+<ul>
+<li><a href="00_oop_concepts.md">00 · OOP Concepts</a> — classes, inheritance, polymorphism</li>
+<li><a href="01_sequence_containers.md">01 · Sequence Containers</a> — vector, deque, list, array</li>
+<li><a href="02_associative_containers.md">02 · Associative Containers</a> — set, map (ordered)</li>
+<li><a href="03_unordered_containers.md">03 · Unordered Containers</a> — hash-based set/map</li>
+<li><a href="04_container_adaptors.md">04 · Container Adaptors</a> — stack, queue, priority_queue</li>
+<li><a href="05_iterators.md">05 · Iterators</a> — categories &amp; invalidation</li>
+<li><a href="06_algorithms.md">06 · Algorithms</a> — sort, find, transform, numeric</li>
+<li><a href="07_modern_features.md">07 · Modern Features</a> — ranges, views, concepts, span</li>
+<li><a href="08_utility_containers.md">08 · Utility Containers</a> — string, optional, variant, tuple</li>
+</ul>
+<p><strong>Generic &amp; Advanced C++</strong></p>
+<ul>
+<li><a href="09_templates.md">09 · Templates</a> — generic programming</li>
+<li><a href="10_lambdas.md">10 · Lambdas</a> — closures &amp; functional patterns</li>
+<li><a href="11_metaprogramming.md">11 · Metaprogramming</a> — constexpr, type traits</li>
+<li><a href="12_advanced_features.md">12 · Advanced Features</a> — move semantics, smart pointers, RAII</li>
+<li><a href="13_best_practices.md">13 · Best Practices</a> — idioms &amp; anti-patterns</li>
+</ul>
+<p><strong>Concurrency, I/O &amp; Systems</strong></p>
+<ul>
+<li><a href="14_multithreading.md">14 · Multithreading</a> — threads, mutexes, atomics</li>
+<li><a href="15_async_futures.md">15 · Async &amp; Futures</a> — async, promise/future, parallelism</li>
+<li><a href="16_io_filesystem.md">16 · I/O &amp; Filesystem</a> — streams, filesystem, format/print</li>
+<li><a href="17_exceptions.md">17 · Exceptions</a> — safety guarantees, expected</li>
+<li><a href="18_time_chrono.md">18 · Time &amp; Chrono</a> — durations, clocks, calendars</li>
+<li><a href="19_memory_allocators.md">19 · Memory &amp; Allocators</a> — PMR, alignment, pools</li>
+<li><a href="20_regex.md">20 · Regex</a> — pattern matching</li>
+<li><a href="21_modules.md">21 · Modules</a> — C++20 modules</li>
+<li><a href="22_coroutines.md">22 · Coroutines</a> — co_await/co_yield/co_return</li>
+</ul>
 <blockquote>
 <p>Tip: the <a href="#container-selection-guide">Container Selection Guide</a> and
 <a href="#time-complexity-quick-reference">Time Complexity table</a> above are the two
