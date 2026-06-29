@@ -7,26 +7,26 @@ The STL algorithms library provides a rich collection of functions for processin
 💡 **Hunch**: Ranges are always **half-open** `[first, last)` — `last` is one-past-the-end and must not be dereferenced. An empty range has `first == last`.
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                STL ALGORITHMS LIBRARY                      │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  NON-MODIFYING      │  MODIFYING        │  SORTING         │
-│  ─────────────      │  ─────────        │  ───────         │
-│  • find             │  • copy           │  • sort          │
-│  • count            │  • fill           │  • partial_sort  │
-│  • search           │  • transform      │  • nth_element   │
-│  • equal            │  • replace        │  • stable_sort   │
-│                     │  • remove         │                  │
-│                     │  • reverse        │                  │
-│  ─────────────────────────────────────────────────────     │
-│  BINARY SEARCH      │  PARTITIONING     │  NUMERIC         │
-│  ─────────────      │  ────────────     │  ───────         │
-│  • lower_bound      │  • partition      │  • accumulate    │
-│  • upper_bound      │  • stable_partition  • inner_product │
-│  • binary_search    │                   │  • adjacent_diff │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                STL ALGORITHMS LIBRARY                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  NON-MODIFYING      │  MODIFYING         │  SORTING         │
+│  ─────────────      │  ─────────         │  ───────         │
+│  • find             │  • copy            │  • sort          │
+│  • count            │  • fill            │  • partial_sort  │
+│  • search           │  • transform       │  • nth_element   │
+│  • equal            │  • replace         │  • stable_sort   │
+│                     │  • remove          │                  │
+│                     │  • reverse         │                  │
+│  ──────────────────────────────────────────────────────     │
+│  BINARY SEARCH      │  PARTITIONING      │  NUMERIC         │
+│  ─────────────      │  ────────────      │  ───────         │
+│  • lower_bound      │  • partition       │  • accumulate    │
+│  • upper_bound      │  • stable_partition|  • inner_product │
+│  • binary_search    │                    │  • adjacent_diff │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Algorithm Characteristics
@@ -369,8 +369,8 @@ int main() {
     // Remove value (doesn't actually erase!)
     auto new_end = std::remove(vec.begin(), vec.end(), 2);
     // vec = {1, 3, 4, 5, ?, ?, ?}
-    //                   ^
-    //               new_end
+    //                    ^
+    //                 new_end
     
     // Must erase to actually remove
     vec.erase(new_end, vec.end());
@@ -399,13 +399,13 @@ int main() {
 ### Visual: How std::remove Works
 ```
 Original: [1, 2, 3, 2, 4, 2, 5]
-                ↑     ↑     ↑
-            (elements to remove: 2)
+              ↑     ↑     ↑
+          (elements to remove: 2)
 
 After std::remove(vec.begin(), vec.end(), 2):
 Result:   [1, 3, 4, 5, 2, 2, 2]
-                      ↑
-                   new_end
+                       ↑
+                    new_end
 
 Elements to keep moved to front.
 Returns iterator to new logical end.
@@ -666,8 +666,8 @@ Original: [9, 3, 7, 1, 8, 2, 6, 4, 5]
 std::nth_element(begin, begin+4, end):
 
 Result:   [3, 2, 1, 4, 5, 7, 8, 9, 6]
-                      ▲
-                    nth element (median)
+                       ▲
+                nth element (median)
           
           └───────────┘ └───────────┘
            all <= 5      all >= 5
@@ -908,7 +908,7 @@ int main() {
                                                 [](int x) { return x % 2 == 0; });
     
     // vec = {2, 4, 6, 8, 1, 3, 5, 7, 9}
-    //                  ▲
+    //                    ▲
     //           partition_point
     
     // Relative order preserved within each partition!
@@ -1140,7 +1140,7 @@ int main() {
 │ std::execution::seq         │    No    │     No      │
 │ std::execution::par         │    Yes   │     No      │
 │ std::execution::par_unseq   │    Yes   │     Yes     │
-│ std::execution::unseq (C++20)    No    │     Yes     │
+│ std::execution::unseq(C++20)|    No    │     Yes     │
 └──────────────────────────────────────────────────────┘
 
 Note: seq, par, and par_unseq are C++17; unseq was added in C++20.
