@@ -9442,8 +9442,8 @@ With iterators:
 <h2 id="iterator-categories">Iterator Categories</h2>
 <h3 id="category-hierarchy">Category Hierarchy</h3>
 <p>Input and output iterators are <strong>separate</strong> single-pass categories. Forward iterators combine multi-pass read/write; each higher category adds operations:</p>
-<pre><code>                    Input Iterator        Output Iterator
-                    (single-pass read)    (single-pass write)
+<pre><code>                  Input Iterator         Output Iterator
+                 (single-pass read)    (single-pass write)
                            \\               /
                             \\             /
                             Forward Iterator
@@ -9452,7 +9452,7 @@ With iterators:
                          Bidirectional Iterator
                              (--it, it--)
                                   │
-                        Random Access Iterator
+                         Random Access Iterator
                         (it+n, it[n], it-it, &lt;)
                                   │
                        Contiguous Iterator (C++20)
@@ -9882,8 +9882,8 @@ dest: [ ][ ][ ]
 inserter (at position 1):
 src:  [1][2][3]
 vec:  [1][5][9]
-         ↓ ↓ ↓
-      [1][1][2][3][5][9]
+       ↓  ↓  ↓
+   [1][1][2][3][5][9]
 </code></pre>
 <h3 id="2-stream-iterators">2. Stream Iterators</h3>
 <pre><code class="language-cpp">#include &lt;iterator&gt;
