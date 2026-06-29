@@ -13611,23 +13611,23 @@ int main() {
 </ul>
 <hr />
 <p><em>Chapter 7 — Modern C++20/23 Features</em></p>` },
-  { name: `10. Utility Containers`, path: `08_utility_containers.md`, dir: ``, words: 5230, mins: 26, body: `<h1 id="utility-containers-and-types">Utility Containers and Types</h1>
+  { name: `10. Utility Containers`, path: `08_utility_containers.md`, dir: ``, words: 5234, mins: 26, body: `<h1 id="utility-containers-and-types">Utility Containers and Types</h1>
 <h2 id="overview">Overview</h2>
 <p>Beyond the standard <a href="01_sequence_containers.md">sequence</a> and <a href="02_associative_containers.md">associative</a> containers, C++ provides several utility types for special purposes: strings, optional values, variants, tuples, and non-owning views like <a href="07_modern_features.md"><code>std::span</code></a>.</p>
 <pre><code>┌──────────────────────────────────────────────────────────┐
 │              UTILITY TYPES AND CONTAINERS                │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  STRING TYPES    │  OPTIONAL TYPES  │  TUPLE TYPES       │
-│  ────────────    │  ──────────────  │  ───────────       │
-│  • string        │  • optional      │  • pair            │
-│  • string_view   │  • variant       │  • tuple           │
-│                  │  • any           │                    │
+│  STRING TYPES     │  OPTIONAL TYPES      │  TUPLE TYPES  │
+│  ────────────     │  ──────────────      │  ───────────  │
+│  • string         │  • optional          │  • pair       │
+│  • string_view    │  • variant           │  • tuple      │
+│                   │  • any               │               │
 │                                                          │
-│  BIT MANIPULATION│  SMART WRAPPERS  │                    │
-│  ────────────────│  ──────────────  │                    │
-│  • bitset        │  • reference_wrapper                  │
-│                  │  • function                           │
+│  BIT MANIPULATION │  SMART WRAPPERS      │               │
+│  ──────────────── │  ──────────────      │               │
+│  • bitset         │  • reference_wrapper |               │
+│                   │  • function          |               │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 </code></pre>
@@ -13639,7 +13639,7 @@ int main() {
 
 int main() {
     // Construction
-    std::string s1;                          // Empty
+    std::string s1;                         // Empty
     std::string s2 = &quot;Hello&quot;;               // From literal
     std::string s3(5, 'a');                 // &quot;aaaaa&quot;
     std::string s4(s2);                     // Copy
@@ -13652,7 +13652,7 @@ int main() {
     s.assign(&quot;World&quot;);
 
     // Concatenation (s1 is still empty here, s2 == &quot;Hello&quot;)
-    std::string result = s1 + &quot; &quot; + s2;    // &quot; Hello&quot;
+    std::string result = s1 + &quot; &quot; + s2;     // &quot; Hello&quot;
     s1 += &quot; World&quot;;                         // Append -&gt; s1 == &quot; World&quot;
     s1.append(&quot; !&quot;);                        // Append method
 
