@@ -45,8 +45,8 @@ With iterators:
 Input and output iterators are **separate** single-pass categories. Forward iterators combine multi-pass read/write; each higher category adds operations:
 
 ```
-                    Input Iterator        Output Iterator
-                    (single-pass read)    (single-pass write)
+                  Input Iterator         Output Iterator
+                 (single-pass read)    (single-pass write)
                            \               /
                             \             /
                             Forward Iterator
@@ -55,7 +55,7 @@ Input and output iterators are **separate** single-pass categories. Forward iter
                          Bidirectional Iterator
                              (--it, it--)
                                   │
-                        Random Access Iterator
+                         Random Access Iterator
                         (it+n, it[n], it-it, <)
                                   │
                        Contiguous Iterator (C++20)
@@ -532,8 +532,8 @@ dest: [ ][ ][ ]
 inserter (at position 1):
 src:  [1][2][3]
 vec:  [1][5][9]
-         ↓ ↓ ↓
-      [1][1][2][3][5][9]
+       ↓  ↓  ↓
+   [1][1][2][3][5][9]
 ```
 
 ### 2. Stream Iterators
