@@ -9,16 +9,16 @@ Beyond the standard [sequence](01_sequence_containers.md) and [associative](02_a
 │              UTILITY TYPES AND CONTAINERS                │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  STRING TYPES    │  OPTIONAL TYPES  │  TUPLE TYPES       │
-│  ────────────    │  ──────────────  │  ───────────       │
-│  • string        │  • optional      │  • pair            │
-│  • string_view   │  • variant       │  • tuple           │
-│                  │  • any           │                    │
+│  STRING TYPES     │  OPTIONAL TYPES      │  TUPLE TYPES  │
+│  ────────────     │  ──────────────      │  ───────────  │
+│  • string         │  • optional          │  • pair       │
+│  • string_view    │  • variant           │  • tuple      │
+│                   │  • any               │               │
 │                                                          │
-│  BIT MANIPULATION│  SMART WRAPPERS  │                    │
-│  ────────────────│  ──────────────  │                    │
-│  • bitset        │  • reference_wrapper                  │
-│                  │  • function                           │
+│  BIT MANIPULATION │  SMART WRAPPERS      │               │
+│  ──────────────── │  ──────────────      │               │
+│  • bitset         │  • reference_wrapper |               │
+│                   │  • function          |               │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -34,7 +34,7 @@ Beyond the standard [sequence](01_sequence_containers.md) and [associative](02_a
 
 int main() {
     // Construction
-    std::string s1;                          // Empty
+    std::string s1;                         // Empty
     std::string s2 = "Hello";               // From literal
     std::string s3(5, 'a');                 // "aaaaa"
     std::string s4(s2);                     // Copy
@@ -47,7 +47,7 @@ int main() {
     s.assign("World");
     
     // Concatenation (s1 is still empty here, s2 == "Hello")
-    std::string result = s1 + " " + s2;    // " Hello"
+    std::string result = s1 + " " + s2;     // " Hello"
     s1 += " World";                         // Append -> s1 == " World"
     s1.append(" !");                        // Append method
     
